@@ -4,22 +4,13 @@
 #include <exception>
 #include <map>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <OpenSSL/bio.h>
-#include <OpenSSL/err.h>
 
+#include "exception.hpp"
 #include "scope_guard.hpp"
-
-class OpenSslError : public std::runtime_error {
-public:
-    OpenSslError(char const *message)
-        : std::runtime_error{message}
-    {
-        // TODO: store instead of print
-        ERR_print_errors_fp(stderr);
-    }
-};
 
 // TODO: get rid of the ugly bool
 static bool receiveData(BIO *bio, std::vector<char>& buffer, size_t& received)
@@ -70,13 +61,31 @@ try {
     std::vector<char> buffer;
     size_t received = 0;
 
-    // TODO: check content-length
+    size_t beginOfBody = 0;
+    while (receiveData(bio, buffer, received)) {
+        std::string_view view{buffer.data(), received};
+
+        auto const n = view.find("\r\n\r\n");
+        if (n != view.npos) {
+            beginOfBody = n + 4;
+            break;
+        }
+    }
+
+    if (beginOfBody == 0) {
+        throw std::runtime_error{"unexpected end of response"};
+    }
+
+    // TODO: use content-length
     while (receiveData(bio, buffer, received)) {
     }
-    buffer.resize(received);
 
-    std::string const response{std::begin(buffer), std::end(buffer)};
-    std::printf("%s\n", response.c_str());
+    // -2 to get rid of the null line between headers and body
+    std::string const headBlock{buffer.data(), beginOfBody - 2};
+    std::string const bodyBlock{buffer.data() + beginOfBody, received - beginOfBody};
+
+    std::printf("Head:\n%s<End of Head>\n\nBody:\n%s<End of Body>\n",
+                headBlock.data(), bodyBlock.data());
 }
 catch (std::exception const& e) {
     std::fprintf(stderr, "Exception: %s\n", e.what());
