@@ -1,8 +1,10 @@
 #include <algorithm>
+#include <cassert>
 #include <cstdio>
 #include <cstdlib>
 #include <exception>
 #include <map>
+#include <regex>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -32,6 +34,29 @@ static bool receiveData(BIO *bio, std::vector<char>& buffer, size_t& received)
     }
     received += n;
     return true;
+}
+
+static int extractStatus(std::vector<char> const& buffer, size_t received)
+{
+    std::string_view view{buffer.data(), received};
+
+    auto const n = view.find("\r\n");
+    assert(n != view.npos);  // use this after receiving the status line
+
+    std::string_view statusLine{buffer.data(), n};
+    std::regex const pattern{R"regex(HTTP/\d+\.\d+\s+(\d\d\d)\s+.*)regex"};
+
+    std::match_results<std::string_view::const_iterator> match;  // regex lack of string view support
+    if (!std::regex_match(std::begin(statusLine), std::end(statusLine),
+                          match, pattern))
+    {
+        // TODO: make a dedicated exception, store instead of print
+        std::string const str{statusLine};  // %*s won't work, maybe bug in stdlib impl
+        std::fprintf(stderr, "%s\n", str.c_str());
+        throw std::runtime_error{"Bad status line"};
+    }
+
+    return std::stoi(match.str(1));
 }
 
 int main()
@@ -75,6 +100,9 @@ try {
     if (beginOfBody == 0) {
         throw std::runtime_error{"unexpected end of response"};
     }
+
+    int const statusCode = extractStatus(buffer, received);
+    std::printf("Status Code: %d\n", statusCode);
 
     // TODO: use content-length
     while (receiveData(bio, buffer, received)) {
