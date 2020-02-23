@@ -15,6 +15,14 @@
 #include "exception.hpp"
 #include "scope_guard.hpp"
 
+struct Response {
+    std::vector<char> raw;
+    int statusCode;
+    std::map<std::string, std::string> headers;
+    size_t beginOfBody;
+    size_t contentLength;
+};
+
 // TODO: get rid of the ugly bool
 static bool receiveData(BIO *bio, std::vector<char>& buffer, size_t& received)
 {
@@ -37,8 +45,7 @@ static bool receiveData(BIO *bio, std::vector<char>& buffer, size_t& received)
     return true;
 }
 
-// TODO: make a dedicated response class
-static void parseMeta(std::vector<char> const& buffer, size_t beginOfBody, int& statusCode, std::map<std::string, std::string>& headers)
+static void parseMeta(std::vector<char> const& buffer, size_t beginOfBody, Response& resp)
 {
     std::string_view view{buffer.data(), beginOfBody};
 
@@ -58,7 +65,7 @@ static void parseMeta(std::vector<char> const& buffer, size_t beginOfBody, int& 
         throw std::runtime_error{"Bad status line"};
     }
 
-    statusCode = std::stoi(match.str(1));
+    resp.statusCode = std::stoi(match.str(1));
 
     size_t const sepSize = 2;
 
@@ -66,7 +73,7 @@ static void parseMeta(std::vector<char> const& buffer, size_t beginOfBody, int& 
     auto const endOfHeaders = beginOfBody - sepSize;  // so that every line is a valid header
     std::string_view headerBlock{buffer.data() + beginOfHeaders, endOfHeaders - beginOfHeaders};
 
-    headers.clear();
+    resp.headers.clear();
 
     std::regex const headerPattern{R"regex(\s*(.*)\s*:\s*(.*)\s*)regex"};
 
@@ -89,11 +96,68 @@ static void parseMeta(std::vector<char> const& buffer, size_t beginOfBody, int& 
                        std::begin(name),
                        [](char c) { return std::tolower(c); });
 
-        headers[name] = match.str(2);
+        resp.headers[name] = match.str(2);
 
         beginOfNextHeader = n + sepSize;
         n = headerBlock.find("\r\n", beginOfNextHeader);
     }
+
+    auto iter = resp.headers.find("content-length");
+    if (iter == std::end(resp.headers)) {  // should an empty value land here too?
+        resp.contentLength = 0;
+    } else {
+        resp.contentLength = std::stoul(iter->second);
+    }
+}
+
+static Response do_request(BIO *bio, std::string const& message)
+{
+    size_t sent = 0;
+    while (sent < message.size()) {
+        int const n = BIO_write(bio, message.data() + sent, message.size() - sent);
+        if (n < 1) {
+            throw OpenSslError{"error sending request"};
+        }
+        sent += n;
+    }
+
+    Response resp;
+
+    std::vector<char>& buffer = resp.raw;
+    size_t received = 0;
+
+    resp.beginOfBody = 0;
+    while (receiveData(bio, buffer, received)) {
+        std::string_view view{buffer.data(), received};
+
+        auto const n = view.find("\r\n\r\n");
+        if (n != view.npos) {
+            resp.beginOfBody = n + 4;
+            break;
+        }
+    }
+
+    if (resp.beginOfBody == 0) {
+        throw std::runtime_error{"unexpected end of response"};
+    }
+
+    parseMeta(buffer, resp.beginOfBody, resp);
+
+    if (400 <= resp.statusCode && resp.statusCode <= 599) {
+        // TODO: better error handling
+        std::fprintf(stderr, "Response: %d\n", resp.statusCode);
+        throw std::runtime_error{"http error"};
+    }
+
+    // TODO: check for HEAD method before using content-length
+    while (received < (resp.beginOfBody + resp.contentLength) && receiveData(bio, buffer, received)) {
+    }
+
+    if (received < (resp.beginOfBody + resp.contentLength)) {
+        throw std::runtime_error{"unexpceted end of body"};
+    }
+
+    return resp;
 }
 
 int main()
@@ -108,56 +172,11 @@ try {
         throw OpenSslError{"error BIO_do_connect"};
     }
 
-    std::string const message{"GET /get HTTP/1.0\r\n\r\n"};
+    std::string const request{"GET /get HTTP/1.0\r\n\r\n"};
+    auto const resp = do_request(bio, request);
 
-    size_t sent = 0;
-    while (sent < message.size()) {
-        int const n = BIO_write(bio, message.data() + sent, message.size() - sent);
-        if (n < 1) {
-            throw OpenSslError{"error sending request"};
-        }
-        sent += n;
-    }
-
-    // TODO: make a dedicated buffer class
-    std::vector<char> buffer;
-    size_t received = 0;
-
-    size_t beginOfBody = 0;
-    while (receiveData(bio, buffer, received)) {
-        std::string_view view{buffer.data(), received};
-
-        auto const n = view.find("\r\n\r\n");
-        if (n != view.npos) {
-            beginOfBody = n + 4;
-            break;
-        }
-    }
-
-    if (beginOfBody == 0) {
-        throw std::runtime_error{"unexpected end of response"};
-    }
-
-    int statusCode;
-    std::map<std::string, std::string> headers;
-    parseMeta(buffer, beginOfBody, statusCode, headers);
-    std::printf("Status Code: %d\n", statusCode);
-    for (auto const& e : headers) {
-        std::printf("[Header] %s = %s\n", e.first.c_str(), e.second.c_str());
-    }
-
-    auto const contentLength = std::stoul(headers.at("content-length"));
-
-    // TODO: use content-length
-    while (received < (beginOfBody + contentLength) && receiveData(bio, buffer, received)) {
-    }
-
-    if (received < (beginOfBody + contentLength)) {
-        throw std::runtime_error{"unexpceted end of body"};
-    }
-
-    std::string const bodyBlock{buffer.data() + beginOfBody, contentLength};
-    std::printf("Body:\n%s<End of Body>\n", bodyBlock.data());
+    std::string body{resp.raw.data() + resp.beginOfBody, resp.contentLength};
+    std::printf("Body:\n%s<End of Body>\n", body.c_str());
 }
 catch (std::exception const& e) {
     std::fprintf(stderr, "Exception: %s\n", e.what());
