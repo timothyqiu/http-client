@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cassert>
+#include <cctype>
 #include <cstdio>
 #include <cstdlib>
 #include <exception>
@@ -36,14 +37,15 @@ static bool receiveData(BIO *bio, std::vector<char>& buffer, size_t& received)
     return true;
 }
 
-static int extractStatus(std::vector<char> const& buffer, size_t received)
+// TODO: make a dedicated response class
+static void parseMeta(std::vector<char> const& buffer, size_t beginOfBody, int& statusCode, std::map<std::string, std::string>& headers)
 {
-    std::string_view view{buffer.data(), received};
+    std::string_view view{buffer.data(), beginOfBody};
 
-    auto const n = view.find("\r\n");
-    assert(n != view.npos);  // use this after receiving the status line
+    auto const endOfStatus = view.find("\r\n");
+    assert(endOfStatus != view.npos);  // use this after receiving the status line
 
-    std::string_view statusLine{buffer.data(), n};
+    std::string_view statusLine{buffer.data(), endOfStatus};
     std::regex const pattern{R"regex(HTTP/\d+\.\d+\s+(\d\d\d)\s+.*)regex"};
 
     std::match_results<std::string_view::const_iterator> match;  // regex lack of string view support
@@ -56,7 +58,42 @@ static int extractStatus(std::vector<char> const& buffer, size_t received)
         throw std::runtime_error{"Bad status line"};
     }
 
-    return std::stoi(match.str(1));
+    statusCode = std::stoi(match.str(1));
+
+    size_t const sepSize = 2;
+
+    auto const beginOfHeaders = endOfStatus + sepSize;
+    auto const endOfHeaders = beginOfBody - sepSize;  // so that every line is a valid header
+    std::string_view headerBlock{buffer.data() + beginOfHeaders, endOfHeaders - beginOfHeaders};
+
+    headers.clear();
+
+    std::regex const headerPattern{R"regex(\s*(.*)\s*:\s*(.*)\s*)regex"};
+
+    size_t beginOfNextHeader = 0;
+    size_t n = headerBlock.find("\r\n", beginOfNextHeader);
+    while (n != headerBlock.npos) {
+        std::string_view line{buffer.data() + beginOfHeaders + beginOfNextHeader, n - beginOfNextHeader};
+
+        std::match_results<std::string_view::const_iterator> match;
+        if (!std::regex_match(std::begin(line), std::end(line),
+                              match, headerPattern))
+        {
+            std::string const str{line};  // %*s won't work, maybe bug in stdlib impl
+            std::fprintf(stderr, "Bad header line: %s\n", str.c_str());
+            continue;
+        }
+
+        std::string name = match.str(1);
+        std::transform(std::begin(name), std::end(name),
+                       std::begin(name),
+                       [](char c) { return std::tolower(c); });
+
+        headers[name] = match.str(2);
+
+        beginOfNextHeader = n + sepSize;
+        n = headerBlock.find("\r\n", beginOfNextHeader);
+    }
 }
 
 int main()
@@ -101,19 +138,26 @@ try {
         throw std::runtime_error{"unexpected end of response"};
     }
 
-    int const statusCode = extractStatus(buffer, received);
+    int statusCode;
+    std::map<std::string, std::string> headers;
+    parseMeta(buffer, beginOfBody, statusCode, headers);
     std::printf("Status Code: %d\n", statusCode);
-
-    // TODO: use content-length
-    while (receiveData(bio, buffer, received)) {
+    for (auto const& e : headers) {
+        std::printf("[Header] %s = %s\n", e.first.c_str(), e.second.c_str());
     }
 
-    // -2 to get rid of the null line between headers and body
-    std::string const headBlock{buffer.data(), beginOfBody - 2};
-    std::string const bodyBlock{buffer.data() + beginOfBody, received - beginOfBody};
+    auto const contentLength = std::stoul(headers.at("content-length"));
 
-    std::printf("Head:\n%s<End of Head>\n\nBody:\n%s<End of Body>\n",
-                headBlock.data(), bodyBlock.data());
+    // TODO: use content-length
+    while (received < (beginOfBody + contentLength) && receiveData(bio, buffer, received)) {
+    }
+
+    if (received < (beginOfBody + contentLength)) {
+        throw std::runtime_error{"unexpceted end of body"};
+    }
+
+    std::string const bodyBlock{buffer.data() + beginOfBody, contentLength};
+    std::printf("Body:\n%s<End of Body>\n", bodyBlock.data());
 }
 catch (std::exception const& e) {
     std::fprintf(stderr, "Exception: %s\n", e.what());
