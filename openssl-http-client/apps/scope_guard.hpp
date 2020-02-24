@@ -1,5 +1,5 @@
-#ifndef OHC_SCOPE_GUARD_HPP_
-#define OHC_SCOPE_GUARD_HPP_
+#ifndef OHC_APP_SCOPE_GUARD_HPP_
+#define OHC_APP_SCOPE_GUARD_HPP_
 
 #include <functional>
 
@@ -27,4 +27,4 @@ private:
 
 #define SCOPE_EXIT(f) ScopeGuard guard_##__LINE__{f}
 
-#endif  // OHC_SCOPE_GUARD_HPP_
+#endif  // OHC_APP_SCOPE_GUARD_HPP_

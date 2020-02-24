@@ -1,0 +1,22 @@
+#ifndef OHC_URL_HPP_
+#define OHC_URL_HPP_
+
+#include <string>
+#include <string_view>
+
+struct Url {
+    std::string scheme;  // always lower case
+    std::string userinfo;
+    std::string host;
+    std::string port;
+    std::string path;
+    std::string query;
+    std::string fragment;
+};
+
+Url parseUrl(std::string_view view);
+
+// relative to root
+std::string relativeUrlString(Url const& url);
+
+#endif  // OHC_URL_HPP_

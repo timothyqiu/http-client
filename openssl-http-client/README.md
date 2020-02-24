@@ -9,6 +9,10 @@ Note: Getting the following link error means that you're linking against the sys
 
     ld: cannot link directly with dylib/framework, your binary is not an allowed client of /usr/lib/libcrypto.dylib for architecture x86_64
 
+The `client` binary now supports setting basic HTTP proxy via the `http_proxy` environment variable:
+
+    http_proxy=localhost:8080 /path/to/client
+
 ## HTTP 1.0
 
 * One connection per request.

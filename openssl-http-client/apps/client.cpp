@@ -12,7 +12,9 @@
 
 #include <OpenSSL/bio.h>
 
-#include "exception.hpp"
+#include <ohc/exception.hpp>
+#include <ohc/url.hpp>
+
 #include "scope_guard.hpp"
 
 struct Request {
@@ -190,15 +192,24 @@ static void connectBio(BIO *bio, Request const& req)
 
 int main()
 try {
-    Request req;
-    req.scheme = "http";
-    req.host = "httpbin.org";
-    req.port = "80";
-    req.method = "GET";
-    req.path = "/get";
+    Url url = parseUrl("http://httpbin.org/get?a=b#token");
 
-    // req.http_proxy_host = "127.0.0.1";
-    // req.http_proxy_port = "8123";
+    Request req;
+    req.scheme = url.scheme;
+    req.host = url.host;
+    req.port = url.port;
+    req.method = "GET";
+    req.path = relativeUrlString(url);
+
+    char const *http_proxy = std::getenv("http_proxy");
+    if (http_proxy) {
+        Url proxyUrl = parseUrl(http_proxy);
+        if (proxyUrl.port.empty()) {
+            throw std::runtime_error{"proxy port missing"};
+        }
+        req.http_proxy_host = proxyUrl.host;
+        req.http_proxy_port = proxyUrl.port;
+    }
 
     BIO *bio = BIO_new(BIO_s_connect());
     if (bio == nullptr) {
