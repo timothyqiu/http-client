@@ -16,3 +16,6 @@ Note: Getting the following link error means that you're linking against the sys
 * Response should have a `Content-Length` header if the entity body exists.
   * Missing `Content-Length` header means 0.
   * `HEAD` has no body, its `Content-Length` is the body size of a corresponding `GET` request.
+* HTTP Proxy
+  * Connect to proxy server instead of the target server.
+  * In the request line, use absolute URL instead of relative path.

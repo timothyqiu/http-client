@@ -15,6 +15,18 @@
 #include "exception.hpp"
 #include "scope_guard.hpp"
 
+struct Request {
+    std::string scheme;
+    std::string host;
+    std::string port;
+    std::string method;
+    std::string path;
+    std::string http_proxy_host;
+    std::string http_proxy_port;
+
+    bool shouldUseHttpProxy() const { return !http_proxy_host.empty() && !http_proxy_port.empty(); }
+};
+
 struct Response {
     std::vector<char> raw;
     int statusCode;
@@ -110,8 +122,11 @@ static void parseMeta(std::vector<char> const& buffer, size_t beginOfBody, Respo
     }
 }
 
-static Response do_request(BIO *bio, std::string const& message)
+static Response do_request(BIO *bio, Request const& req)
 {
+    auto const requestUri = req.shouldUseHttpProxy() ? req.scheme + "://" + req.host + ":" + req.port + req.path : req.path;
+    auto const message = req.method + " " + requestUri + " HTTP/1.0\r\n\r\n";
+
     size_t sent = 0;
     while (sent < message.size()) {
         int const n = BIO_write(bio, message.data() + sent, message.size() - sent);
@@ -130,6 +145,9 @@ static Response do_request(BIO *bio, std::string const& message)
     while (receiveData(bio, buffer, received)) {
         std::string_view view{buffer.data(), received};
 
+        // a null line separates headers and body
+        // although this approach is not friendly with Simple-Response
+        // which body is the response
         auto const n = view.find("\r\n\r\n");
         if (n != view.npos) {
             resp.beginOfBody = n + 4;
@@ -138,45 +156,67 @@ static Response do_request(BIO *bio, std::string const& message)
     }
 
     if (resp.beginOfBody == 0) {
+        std::fprintf(stderr, "Raw response: %s\n", std::string{std::begin(buffer), std::begin(buffer) + received}.c_str());
         throw std::runtime_error{"unexpected end of response"};
     }
 
     parseMeta(buffer, resp.beginOfBody, resp);
 
-    if (400 <= resp.statusCode && resp.statusCode <= 599) {
-        // TODO: better error handling
-        std::fprintf(stderr, "Response: %d\n", resp.statusCode);
-        throw std::runtime_error{"http error"};
+    size_t const bodySize = req.method == "HEAD" ? 0 : resp.contentLength;
+    while (received < (resp.beginOfBody + bodySize) && receiveData(bio, buffer, received)) {
     }
-
-    // TODO: check for HEAD method before using content-length
-    while (received < (resp.beginOfBody + resp.contentLength) && receiveData(bio, buffer, received)) {
-    }
-
-    if (received < (resp.beginOfBody + resp.contentLength)) {
+    if (received < (resp.beginOfBody + bodySize)) {
+        std::fprintf(stderr, "Expected body size: %zu != %zu\n", bodySize, received - resp.beginOfBody);
         throw std::runtime_error{"unexpceted end of body"};
     }
 
     return resp;
 }
 
-int main()
-try {
-    BIO *bio = BIO_new_connect("httpbin.org:80");
-    if (bio == nullptr) {
-        throw OpenSslError{"error BIO_new_connect"};
+static void connectBio(BIO *bio, Request const& req)
+{
+    auto const& host = req.shouldUseHttpProxy() ? req.http_proxy_host : req.host;
+    auto const& port = req.shouldUseHttpProxy() ? req.http_proxy_port : req.port;
+
+    if (BIO_set_conn_hostname(bio, host.c_str()) < 1) {
+        throw OpenSslError{"error BIO_set_conn_hostname"};
     }
-    SCOPE_EXIT([&]{ BIO_free_all(bio); });
+    BIO_set_conn_port(bio, port.c_str());
 
     if (BIO_do_connect(bio) < 1) {
         throw OpenSslError{"error BIO_do_connect"};
     }
+}
 
-    std::string const request{"GET /get HTTP/1.0\r\n\r\n"};
-    auto const resp = do_request(bio, request);
+int main()
+try {
+    Request req;
+    req.scheme = "http";
+    req.host = "httpbin.org";
+    req.port = "80";
+    req.method = "GET";
+    req.path = "/get";
 
-    std::string body{resp.raw.data() + resp.beginOfBody, resp.contentLength};
-    std::printf("Body:\n%s<End of Body>\n", body.c_str());
+    // req.http_proxy_host = "127.0.0.1";
+    // req.http_proxy_port = "8123";
+
+    BIO *bio = BIO_new(BIO_s_connect());
+    if (bio == nullptr) {
+        throw OpenSslError{"error BIO_new"};
+    }
+    SCOPE_EXIT([&]{ BIO_free_all(bio); });
+
+    connectBio(bio, req);
+
+    auto const resp = do_request(bio, req);
+
+    std::printf("Status: %d\n", resp.statusCode);
+    std::printf("Headers:\n");
+    for (auto const& e : resp.headers) {
+        std::printf("\t%s = %s\n", e.first.c_str(), e.second.c_str());
+    }
+    std::printf("Body:\n%s<End of Body>\n",
+                std::string{resp.raw.data() + resp.beginOfBody, resp.contentLength}.c_str());
 }
 catch (std::exception const& e) {
     std::fprintf(stderr, "Exception: %s\n", e.what());
