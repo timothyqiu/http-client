@@ -14,9 +14,11 @@ struct Url {
     std::string fragment;
 };
 
-Url parseUrl(std::string_view view);
+Url parseUrl(std::string_view view, std::string_view defaultScheme={});
 
 // relative to root
-std::string relativeUrlString(Url const& url);
+std::string relativeUrlString(Url const& url, bool allowFragment=false);
+
+std::string absoluteUrlString(Url const& url, bool allowFragment=false);
 
 #endif  // OHC_URL_HPP_

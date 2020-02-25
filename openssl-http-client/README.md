@@ -16,6 +16,7 @@ The `client` binary now supports setting basic HTTP proxy via the `http_proxy` e
 ## HTTP 1.0
 
 * One connection per request.
+* There are only three methods: `HEAD`, `GET`, `POST`.
 * No request header is mandatory.
 * Response should have a `Content-Length` header if the entity body exists.
   * Missing `Content-Length` header means 0.
@@ -23,3 +24,8 @@ The `client` binary now supports setting basic HTTP proxy via the `http_proxy` e
 * HTTP Proxy
   * Connect to proxy server instead of the target server.
   * In the request line, use absolute URL instead of relative path.
+
+## HTTP 1.1
+
+* Allows multiple requests per connection.
+* `Host` header is mandatory.

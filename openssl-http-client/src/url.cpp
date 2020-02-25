@@ -4,7 +4,19 @@
 #include <cctype>
 #include <stdexcept>
 
-Url parseUrl(std::string_view view)
+// TODO: some optimization? use static object?
+static std::string portFromScheme(std::string_view scheme)
+{
+    if (scheme == "http") {
+        return "80";
+    }
+    if (scheme == "https") {
+        return "443";
+    }
+    return "";  // not recognized
+}
+
+Url parseUrl(std::string_view view, std::string_view defaultScheme)
 {
     Url url;
 
@@ -16,6 +28,8 @@ Url parseUrl(std::string_view view)
 
         auto const offset = n + 3;
         view = std::string_view{view.data() + offset, view.size() - offset};
+    } else {
+        url.scheme = defaultScheme;
     }
 
     {
@@ -45,11 +59,7 @@ Url parseUrl(std::string_view view)
     if (url.port.empty()) {
         // url.port = url.scheme works as well
         // but to keep 'port is an integer' true...
-        if (url.scheme == "https") {
-            url.port = "443";
-        } else if (url.scheme == "http") {
-            url.port = "80";
-        }
+        url.port = portFromScheme(url.scheme);
         // TODO: should port be left empty?
     }
 
@@ -68,8 +78,23 @@ Url parseUrl(std::string_view view)
     return url;
 }
 
-std::string relativeUrlString(Url const& url)
+std::string relativeUrlString(Url const& url, bool allowFragment)
 {
+    auto const& path = url.path.empty() ? "/" : url.path;
     auto const& query = url.query.empty() ? "" : "?" + url.query;
-    return url.path + query;
+    auto const& fragment = !allowFragment || url.fragment.empty() ? "" : "#" + url.fragment;
+    return path + query + fragment;
+}
+
+std::string absoluteUrlString(Url const& url, bool allowFragment)
+{
+    if (url.scheme.empty()) {
+        throw std::runtime_error{"missing scheme"};
+    }
+    auto const& userinfo = url.userinfo.empty() ? "" : url.userinfo + "@";
+    auto const& port = url.port.empty() || url.port == portFromScheme(url.scheme) ? "" : ":" + url.port;
+    auto const& path = url.path.empty() ? "/" : url.path;
+    auto const& query = url.query.empty() ? "" : "?" + url.query;
+    auto const& fragment = !allowFragment || url.fragment.empty() ? "" : "#" + url.fragment;
+    return url.scheme + "://" + userinfo + url.host + port + path + query + fragment;
 }

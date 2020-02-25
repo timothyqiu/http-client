@@ -10,6 +10,7 @@
 #include <string_view>
 #include <vector>
 
+#include <CLI/CLI.hpp>
 #include <OpenSSL/bio.h>
 
 #include <ohc/exception.hpp>
@@ -17,12 +18,11 @@
 
 #include "scope_guard.hpp"
 
+enum class HttpVersion { VERSION_1_0, VERSION_1_1 };
+
 struct Request {
-    std::string scheme;
-    std::string host;
-    std::string port;
+    Url url;
     std::string method;
-    std::string path;
     std::string http_proxy_host;
     std::string http_proxy_port;
 
@@ -124,10 +124,31 @@ static void parseMeta(std::vector<char> const& buffer, size_t beginOfBody, Respo
     }
 }
 
-static Response do_request(BIO *bio, Request const& req)
+static std::string makeRequestMessage(Request const& req, HttpVersion httpVersion)
 {
-    auto const requestUri = req.shouldUseHttpProxy() ? req.scheme + "://" + req.host + ":" + req.port + req.path : req.path;
-    auto const message = req.method + " " + requestUri + " HTTP/1.0\r\n\r\n";
+    auto const requestUri = req.shouldUseHttpProxy() ? absoluteUrlString(req.url) : relativeUrlString(req.url);
+
+    std::string versionMark;
+    std::string header;
+
+    switch (httpVersion) {
+    case HttpVersion::VERSION_1_0:
+        versionMark = "HTTP/1.0";
+        break;
+
+    case HttpVersion::VERSION_1_1:
+        versionMark = "HTTP/1.1";
+        header = "Host: " + req.url.host + "\r\n";
+        break;
+    }
+
+    return req.method + " " + requestUri + " " + versionMark +"\r\n" + header + "\r\n";
+}
+
+static Response do_request(BIO *bio, Request const& req, HttpVersion httpVersion)
+{
+    auto const message = makeRequestMessage(req, httpVersion);
+    std::printf("Message:\n%s<End of Message>\n", message.c_str());
 
     size_t sent = 0;
     while (sent < message.size()) {
@@ -177,8 +198,8 @@ static Response do_request(BIO *bio, Request const& req)
 
 static void connectBio(BIO *bio, Request const& req)
 {
-    auto const& host = req.shouldUseHttpProxy() ? req.http_proxy_host : req.host;
-    auto const& port = req.shouldUseHttpProxy() ? req.http_proxy_port : req.port;
+    auto const& host = req.shouldUseHttpProxy() ? req.http_proxy_host : req.url.host;
+    auto const& port = req.shouldUseHttpProxy() ? req.http_proxy_port : req.url.port;
 
     if (BIO_set_conn_hostname(bio, host.c_str()) < 1) {
         throw OpenSslError{"error BIO_set_conn_hostname"};
@@ -190,19 +211,16 @@ static void connectBio(BIO *bio, Request const& req)
     }
 }
 
-int main()
-try {
-    Url url = parseUrl("http://httpbin.org/get?a=b#token");
+static Response request(std::string_view method, std::string_view url_string,
+                        std::string_view http_proxy={}, HttpVersion httpVersion=HttpVersion::VERSION_1_0)
+{
+    Url const url = parseUrl(url_string, "http");
 
     Request req;
-    req.scheme = url.scheme;
-    req.host = url.host;
-    req.port = url.port;
-    req.method = "GET";
-    req.path = relativeUrlString(url);
+    req.url = url;
+    req.method = method;
 
-    char const *http_proxy = std::getenv("http_proxy");
-    if (http_proxy) {
+    if (!http_proxy.empty()) {
         Url proxyUrl = parseUrl(http_proxy);
         if (proxyUrl.port.empty()) {
             throw std::runtime_error{"proxy port missing"};
@@ -219,7 +237,31 @@ try {
 
     connectBio(bio, req);
 
-    auto const resp = do_request(bio, req);
+    return do_request(bio, req, httpVersion);
+}
+
+int main(int argc, char *argv[])
+try {
+    CLI::App app{"HTTP Client via OpenSSL"};
+
+    HttpVersion version{HttpVersion::VERSION_1_0};
+    std::map<std::string, HttpVersion> const versionMap{
+        {"1.0", HttpVersion::VERSION_1_0},
+        {"1.1", HttpVersion::VERSION_1_1},
+    };
+    app.add_option("--http-version", version, "HTTP version")
+        ->transform(CLI::CheckedTransformer(versionMap, CLI::ignore_case));
+
+    std::string url{"http://httpbin.org/get?a=b#token"};
+    app.add_option("url", url, "Target URL");
+
+    std::string http_proxy;
+    app.add_option("--http-proxy", http_proxy, "HTTP proxy server")->envname("http_proxy");
+
+    CLI11_PARSE(app, argc, argv);
+
+    // TODO: make a Session object
+    auto const resp = request("GET", url, http_proxy, version);
 
     std::printf("Status: %d\n", resp.statusCode);
     std::printf("Headers:\n");
