@@ -25,6 +25,8 @@ private:
     std::function<void()> func_;
 };
 
-#define SCOPE_EXIT(f) ScopeGuard guard_##__LINE__{f}
+#define CONCAT_IMPL(a, b) a ## b
+#define CONCAT(a, b) CONCAT_IMPL(a, b)
+#define SCOPE_EXIT(f) ScopeGuard CONCAT(guard_,__LINE__){f}
 
 #endif  // OHC_APP_SCOPE_GUARD_HPP_

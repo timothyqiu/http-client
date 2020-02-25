@@ -12,6 +12,7 @@
 
 #include <CLI/CLI.hpp>
 #include <OpenSSL/bio.h>
+#include <OpenSSL/ssl.h>
 
 #include <ohc/exception.hpp>
 #include <ohc/url.hpp>
@@ -26,7 +27,12 @@ struct Request {
     std::string http_proxy_host;
     std::string http_proxy_port;
 
-    bool shouldUseHttpProxy() const { return !http_proxy_host.empty() && !http_proxy_port.empty(); }
+    std::string const& connectHost() const { return shouldUseHttpProxy() ? http_proxy_host : url.host; }
+    std::string const& connectPort() const { return shouldUseHttpProxy() ? http_proxy_port : url.port; }
+
+    bool shouldUseHttpProxy() const {
+        return url.scheme == "http" && !http_proxy_host.empty() && !http_proxy_port.empty();
+    }
 };
 
 struct Response {
@@ -198,13 +204,10 @@ static Response do_request(BIO *bio, Request const& req, HttpVersion httpVersion
 
 static void connectBio(BIO *bio, Request const& req)
 {
-    auto const& host = req.shouldUseHttpProxy() ? req.http_proxy_host : req.url.host;
-    auto const& port = req.shouldUseHttpProxy() ? req.http_proxy_port : req.url.port;
-
-    if (BIO_set_conn_hostname(bio, host.c_str()) < 1) {
+    if (BIO_set_conn_hostname(bio, req.connectHost().c_str()) < 1) {
         throw OpenSslError{"error BIO_set_conn_hostname"};
     }
-    BIO_set_conn_port(bio, port.c_str());
+    BIO_set_conn_port(bio, req.connectPort().c_str());
 
     if (BIO_do_connect(bio) < 1) {
         throw OpenSslError{"error BIO_do_connect"};
@@ -236,6 +239,38 @@ static Response request(std::string_view method, std::string_view url_string,
     SCOPE_EXIT([&]{ BIO_free_all(bio); });
 
     connectBio(bio, req);
+
+    // TODO: would be better to use one do_request for http/https
+    // this is now an early return basically due to SCOPE_EXIT of ctx
+    if (req.url.scheme == "http") {
+        return do_request(bio, req, httpVersion);
+    }
+
+    SSL_CTX *ctx = SSL_CTX_new(TLS_client_method());
+    if (ctx == nullptr) {
+        throw OpenSslError{"error SSL_CTX_new"};
+    }
+    SCOPE_EXIT([&]{ SSL_CTX_free(ctx); });
+
+    if (SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION) < 1) {
+        throw OpenSslError{"error SSL_CTX_set_min_proto_version"};
+    }
+
+    BIO *ssl = BIO_new_ssl(ctx, /*client*/1);
+    if (ssl == nullptr) {
+        throw OpenSslError{"error BIO_new_ssl"};
+    }
+
+    // FIXME: this works, but ugly and error-prone
+    // (bio) is now (ssl -> bio)
+    bio = BIO_push(ssl, bio);
+
+    // this step will be done at I/O if omitted
+    if (BIO_do_handshake(bio) < 1) {
+        throw OpenSslError{"error BIO_do_handshake"};
+    }
+
+    // TODO: verification
 
     return do_request(bio, req, httpVersion);
 }
