@@ -4,8 +4,10 @@ FetchContent_Declare(
   GIT_TAG v2.11.1
 )
 FetchContent_MakeAvailable(catch2)
+list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/contrib)
 
-add_executable(test-ohc test_ohc.cpp)
-target_link_libraries(test-ohc PRIVATE ohc::ohc Catch2::Catch2)
+add_executable(test-library test_library.cpp)
+target_link_libraries(test-library PRIVATE ohc::ohc Catch2::Catch2)
 
-add_test(NAME MainTest COMMAND test-ohc)
+include(Catch)
+catch_discover_tests(test-library)
