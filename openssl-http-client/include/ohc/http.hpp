@@ -2,6 +2,7 @@
 #define OHC_HTTP_HPP_
 
 #include <map>
+#include <string>
 #include <vector>
 
 #include <ohc/url.hpp>
@@ -15,14 +16,17 @@ struct Request {
 
     Url url;
     Url httpProxy;
+    Url httpsProxy;
 
     // the host and port to connect to
     std::string const& connectHost() const;
     std::string const& connectPort() const;
 
     bool shouldUseHttpProxy() const;
+    bool shouldUseHttpsProxy() const;
 
     std::string makeMessage() const;
+    std::string makeHttpsProxyConnectMessage() const;
 };
 
 struct Response {
@@ -31,6 +35,8 @@ struct Response {
     std::map<std::string, std::string> headers;
     size_t beginOfBody;
     size_t contentLength;
+
+    bool isSuccess() const;
 };
 
 #endif  // OHC_HTTP_HPP_

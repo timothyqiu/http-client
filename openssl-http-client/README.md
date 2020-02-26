@@ -9,9 +9,9 @@ Note: Getting the following link error means that you're linking against the sys
 
     ld: cannot link directly with dylib/framework, your binary is not an allowed client of /usr/lib/libcrypto.dylib for architecture x86_64
 
-The `client` binary now supports setting basic HTTP proxy via the `http_proxy` environment variable:
+The `client` binary now supports setting basic proxy via the `http_proxy` and `https_proxy` environment variables:
 
-    http_proxy=localhost:8080 /path/to/client
+    https_proxy=localhost:8080 /path/to/client https://httpbin.org/ip
 
 ## HTTP 1.0
 
@@ -21,11 +21,22 @@ The `client` binary now supports setting basic HTTP proxy via the `http_proxy` e
 * Response should have a `Content-Length` header if the entity body exists.
   * Missing `Content-Length` header means 0.
   * `HEAD` has no body, its `Content-Length` is the body size of a corresponding `GET` request.
-* HTTP Proxy
-  * Connect to proxy server instead of the target server.
-  * In the request line, use absolute URL instead of relative path.
 
 ## HTTP 1.1
 
 * Allows multiple requests per connection.
 * `Host` header is mandatory.
+
+## Proxy
+
+Envionment variables `http_proxy`, `https_proxy` are usually used to specifiy proxies.
+
+The content of the environment variables is the URL `[protocol://]host[:port]`, some applications require the `protocol://` part, some defaults it to `http://`. The protocol part determines how to connect to the proxy server.
+
+After connecting to the proxy server:
+
+* To visit a HTTP URL: Do a normal request, but in the request line, use absolute URL instead of relative path.
+* To visit a HTTPS site:
+  * Issue a `CONNECT` request, the request URI in the request line should be the target server host and port.
+    * The `Host` header should use the proxy server host, because this `CONNECT` request itself is sent to the proxy server.
+  * Then, do normal HTTPS requests on the established connection (handshake first, then send requests etc...).
