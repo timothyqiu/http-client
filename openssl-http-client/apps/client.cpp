@@ -13,35 +13,16 @@
 #include <CLI/CLI.hpp>
 #include <OpenSSL/bio.h>
 #include <OpenSSL/ssl.h>
+#include <openssl/x509v3.h>
 
 #include <ohc/exception.hpp>
+#include <ohc/http.hpp>
 #include <ohc/url.hpp>
 
 #include "scope_guard.hpp"
 
-enum class HttpVersion { VERSION_1_0, VERSION_1_1 };
+static_assert(OPENSSL_VERSION_NUMBER >= 0x10100000L, "Use OpenSSL version 1.0.1 or later");
 
-struct Request {
-    Url url;
-    std::string method;
-    std::string http_proxy_host;
-    std::string http_proxy_port;
-
-    std::string const& connectHost() const { return shouldUseHttpProxy() ? http_proxy_host : url.host; }
-    std::string const& connectPort() const { return shouldUseHttpProxy() ? http_proxy_port : url.port; }
-
-    bool shouldUseHttpProxy() const {
-        return url.scheme == "http" && !http_proxy_host.empty() && !http_proxy_port.empty();
-    }
-};
-
-struct Response {
-    std::vector<char> raw;
-    int statusCode;
-    std::map<std::string, std::string> headers;
-    size_t beginOfBody;
-    size_t contentLength;
-};
 
 // TODO: get rid of the ugly bool
 static bool receiveData(BIO *bio, std::vector<char>& buffer, size_t& received)
@@ -130,30 +111,11 @@ static void parseMeta(std::vector<char> const& buffer, size_t beginOfBody, Respo
     }
 }
 
-static std::string makeRequestMessage(Request const& req, HttpVersion httpVersion)
+static Response do_request(BIO *bio, Request const& req)
 {
-    auto const requestUri = req.shouldUseHttpProxy() ? absoluteUrlString(req.url) : relativeUrlString(req.url);
+    auto const message = req.makeMessage();
 
-    std::string versionMark;
-    std::string header;
-
-    switch (httpVersion) {
-    case HttpVersion::VERSION_1_0:
-        versionMark = "HTTP/1.0";
-        break;
-
-    case HttpVersion::VERSION_1_1:
-        versionMark = "HTTP/1.1";
-        header = "Host: " + req.url.host + "\r\n";
-        break;
-    }
-
-    return req.method + " " + requestUri + " " + versionMark +"\r\n" + header + "\r\n";
-}
-
-static Response do_request(BIO *bio, Request const& req, HttpVersion httpVersion)
-{
-    auto const message = makeRequestMessage(req, httpVersion);
+    // FIXME: only print when verbose
     std::printf("Message:\n%s<End of Message>\n", message.c_str());
 
     size_t sent = 0;
@@ -214,22 +176,22 @@ static void connectBio(BIO *bio, Request const& req)
     }
 }
 
-static Response request(std::string_view method, std::string_view url_string,
-                        std::string_view http_proxy={}, HttpVersion httpVersion=HttpVersion::VERSION_1_0)
+static Response request(std::string_view method, std::string_view urlString,
+                        std::string_view httpProxy, HttpVersion httpVersion,
+                        bool noVerify)
 {
-    Url const url = parseUrl(url_string, "http");
+    Url const url = parseUrl(urlString, "http");
 
     Request req;
+    req.version = httpVersion;
     req.url = url;
     req.method = method;
 
-    if (!http_proxy.empty()) {
-        Url proxyUrl = parseUrl(http_proxy);
-        if (proxyUrl.port.empty()) {
-            throw std::runtime_error{"proxy port missing"};
+    if (!httpProxy.empty()) {
+        req.httpProxy = parseUrl(httpProxy, "http");
+        if (req.httpProxy.scheme != "http") {
+            throw std::runtime_error{"proxy server using non-http scheme not supported"};
         }
-        req.http_proxy_host = proxyUrl.host;
-        req.http_proxy_port = proxyUrl.port;
     }
 
     BIO *bio = BIO_new(BIO_s_connect());
@@ -243,7 +205,7 @@ static Response request(std::string_view method, std::string_view url_string,
     // TODO: would be better to use one do_request for http/https
     // this is now an early return basically due to SCOPE_EXIT of ctx
     if (req.url.scheme == "http") {
-        return do_request(bio, req, httpVersion);
+        return do_request(bio, req);
     }
 
     SSL_CTX *ctx = SSL_CTX_new(TLS_client_method());
@@ -255,31 +217,65 @@ static Response request(std::string_view method, std::string_view url_string,
     if (SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION) < 1) {
         throw OpenSslError{"error SSL_CTX_set_min_proto_version"};
     }
+    if (SSL_CTX_set_default_verify_paths(ctx) < 1) {
+        throw OpenSslError{"error SSL_CTX_set_default_verify_paths"};
+    }
 
-    BIO *ssl = BIO_new_ssl(ctx, /*client*/1);
-    if (ssl == nullptr) {
+    BIO *ssl_bio = BIO_new_ssl(ctx, /*client*/1);
+    if (ssl_bio == nullptr) {
         throw OpenSslError{"error BIO_new_ssl"};
     }
 
     // FIXME: this works, but ugly and error-prone
-    // (bio) is now (ssl -> bio)
-    bio = BIO_push(ssl, bio);
+    // (bio) is now (ssl_bio -> bio)
+    bio = BIO_push(ssl_bio, bio);
+
+    SSL *ssl;
+    if (BIO_get_ssl(ssl_bio, &ssl) < 1) {
+        throw OpenSslError{"error BIO_get_ssl"};
+    }
+
+    // SNI
+    if (SSL_set_tlsext_host_name(ssl, req.url.host.c_str()) < 1) {
+        throw OpenSslError{"error SSL_set_tlsext_host_name"};
+    }
 
     // this step will be done at I/O if omitted
     if (BIO_do_handshake(bio) < 1) {
         throw OpenSslError{"error BIO_do_handshake"};
     }
 
-    // TODO: verification
+    if (!noVerify) {
+        auto const error = SSL_get_verify_result(ssl);
+        if (error != X509_V_OK) {
+            throw std::runtime_error{X509_verify_cert_error_string(error)};
+        }
 
-    return do_request(bio, req, httpVersion);
+        // SSL_get_verify_result returns OK when no cert is available
+        auto *cert = SSL_get_peer_certificate(ssl);
+        if (cert == nullptr) {
+            throw std::runtime_error{"no certificate available"};
+        }
+
+        // vaild certificate, but site mismatch
+        if (X509_check_host(cert, req.url.host.data(), req.url.host.size(), 0, nullptr) < 1) {
+            throw std::runtime_error{"host mismatch"};
+        }
+
+        // TODO: revoked certificate
+    }
+
+    return do_request(bio, req);
 }
 
 int main(int argc, char *argv[])
 try {
     CLI::App app{"HTTP Client via OpenSSL"};
 
-    HttpVersion version{HttpVersion::VERSION_1_0};
+    std::string url;
+    app.add_option("url", url, "Target URL")->required();
+
+    HttpVersion version{HttpVersion::VERSION_1_1};
     std::map<std::string, HttpVersion> const versionMap{
         {"1.0", HttpVersion::VERSION_1_0},
         {"1.1", HttpVersion::VERSION_1_1},
@@ -287,16 +283,16 @@ try {
     app.add_option("--http-version", version, "HTTP version")
         ->transform(CLI::CheckedTransformer(versionMap, CLI::ignore_case));
 
-    std::string url{"http://httpbin.org/get?a=b#token"};
-    app.add_option("url", url, "Target URL");
+    std::string httpProxy;
+    app.add_option("--http-proxy", httpProxy, "The proxy server to use for HTTP")->envname("http_proxy");
 
-    std::string http_proxy;
-    app.add_option("--http-proxy", http_proxy, "HTTP proxy server")->envname("http_proxy");
+    bool noVerify{false};
+    app.add_flag("--no-verify", noVerify, "Skip HTTPS certificate verification");
 
     CLI11_PARSE(app, argc, argv);
 
     // TODO: make a Session object
-    auto const resp = request("GET", url, http_proxy, version);
+    auto const resp = request("GET", url, httpProxy, version, noVerify);
 
     std::printf("Status: %d\n", resp.statusCode);
     std::printf("Headers:\n");
