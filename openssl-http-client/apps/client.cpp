@@ -95,7 +95,7 @@ static void parseMeta(std::vector<char> const& buffer, size_t beginOfBody, Respo
 
     resp.headers.clear();
 
-    std::regex const headerPattern{R"regex(\s*(.*)\s*:\s*(.*)\s*)regex"};
+    std::regex const headerPattern{R"regex(\s*([^:]*)\s*:\s*(.*)\s*)regex"};
 
     size_t beginOfNextHeader = 0;
     size_t n = headerBlock.find("\r\n", beginOfNextHeader);
