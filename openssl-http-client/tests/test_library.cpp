@@ -123,3 +123,22 @@ TEST_CASE("absoluteUrlString should work", "[url]") {
         REQUIRE_THROWS(absoluteUrlString(url));
     }
 }
+
+TEST_CASE("url authority", "[url]") {
+    Url url = parseUrl("http://localhost:8080/path?a=b#token");
+
+    SECTION("normal case") {
+        REQUIRE(url.authority() == "localhost:8080");
+    }
+
+    SECTION("without port") {
+        url.port = "";
+        REQUIRE(url.authority() == "localhost");
+    }
+
+    SECTION("should be without no userinfo") {
+        url.userinfo = "user";
+        REQUIRE(url.authority() == "localhost:8080");
+    }
+}
+

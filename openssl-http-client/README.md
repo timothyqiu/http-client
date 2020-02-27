@@ -26,6 +26,7 @@ The `client` binary now supports setting basic proxy via the `http_proxy` and `h
 
 * Allows multiple requests per connection.
 * `Host` header is mandatory.
+* The client must support "chunked" transfer encoding, an alternative way to determine the content length.
 
 ## Proxy
 

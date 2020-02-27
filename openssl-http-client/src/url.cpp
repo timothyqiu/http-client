@@ -4,6 +4,14 @@
 #include <cctype>
 #include <stdexcept>
 
+std::string Url::authority() const
+{
+    if (port.empty()) {
+        return host;
+    }
+    return host + ":" + port;
+}
+
 // TODO: some optimization? use static object?
 static std::string portFromScheme(std::string_view scheme)
 {

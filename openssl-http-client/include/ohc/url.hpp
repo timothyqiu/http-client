@@ -12,6 +12,8 @@ struct Url {
     std::string path;
     std::string query;
     std::string fragment;
+
+    std::string authority() const;  // without userinfo
 };
 
 Url parseUrl(std::string_view view, std::string_view defaultScheme={});

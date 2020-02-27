@@ -15,7 +15,7 @@ struct Request;
 class Proxy {
 public:
     void set(std::string_view scheme, Url const& url);
-    std::optional<Url> get(Request const& req) const;
+    std::optional<Url> get(std::string_view scheme) const;
 
 private:
     std::map<std::string, Url> servers;
@@ -30,7 +30,7 @@ struct Request {
     Url url;
     Url connectAuthority;
 
-    Proxy proxyServers;
+    std::optional<Url> proxy;
 
     std::string makeRequestUri() const;
     std::string makeMessage() const;

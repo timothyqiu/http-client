@@ -15,9 +15,9 @@ void Proxy::set(std::string_view scheme, Url const& url)
     servers[std::string{scheme}] = url;
 }
 
-std::optional<Url> Proxy::get(Request const& req) const
+std::optional<Url> Proxy::get(std::string_view scheme) const
 {
-    auto const iter = servers.find(req.url.scheme);
+    auto const iter = servers.find(std::string{scheme});
     if (iter == std::end(servers)) {
         return {};
     }
@@ -28,9 +28,9 @@ std::string Request::makeRequestUri() const
 {
     if (method == "CONNECT") {
         assert(!connectAuthority.host.empty() && !connectAuthority.port.empty());
-        return connectAuthority.host + ":" + connectAuthority.port;
+        return connectAuthority.authority();
     }
-    if (url.scheme == "http" && proxyServers.get(*this)) {
+    if (url.scheme == "http" && proxy) {
         return absoluteUrlString(url);
     }
     return relativeUrlString(url);

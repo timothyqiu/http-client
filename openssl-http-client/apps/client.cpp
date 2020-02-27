@@ -29,7 +29,7 @@ static_assert(OPENSSL_VERSION_NUMBER >= 0x10100000L, "Use OpenSSL version 1.0.1 
 static bool receiveData(BIO *bio, std::vector<char>& buffer, size_t& received)
 {
     size_t const minimumAvailable = 128;
-    while (buffer.size() - received < minimumAvailable) {
+    if (buffer.size() < received + minimumAvailable) {
         buffer.resize(std::max(buffer.size() * 2, buffer.size() + minimumAvailable));
     }
 
@@ -102,11 +102,26 @@ static void parseMeta(std::vector<char> const& buffer, size_t beginOfBody, Respo
         n = headerBlock.find("\r\n", beginOfNextHeader);
     }
 
-    auto iter = resp.headers.find("content-length");
-    if (iter == std::end(resp.headers)) {  // should an empty value land here too?
+    if (resp.statusCode / 100 == 1 || resp.statusCode == 204 || resp.statusCode == 304) {
         resp.contentLength = 0;
     } else {
-        resp.contentLength = std::stoul(iter->second);
+        if (auto const iter = resp.headers.find("transfer-encoding"); iter != std::end(resp.headers)) {
+            // TODO: handle chunked transfer encoding
+            std::string transferEncoding{iter->second};
+            std::transform(std::begin(transferEncoding), std::end(transferEncoding),
+                           std::begin(transferEncoding),
+                           [](char c) { return std::tolower(c); });
+            if (transferEncoding != "identity") {
+                throw std::runtime_error{"unsupported transfer encoding: " + transferEncoding};
+            }
+        }
+
+        if (auto const iter = resp.headers.find("content-length"); iter != std::end(resp.headers)) {
+            resp.contentLength = std::stoul(iter->second);
+        } else {
+            // should an empty value land here too?
+            resp.contentLength = 0;
+        }
     }
 }
 
@@ -147,6 +162,8 @@ static Response do_request(BIO *bio, Request const& req)
         spdlog::error("Unexpected end of response: %s", std::string{std::begin(buffer), std::begin(buffer) + received});
         throw std::runtime_error{"unexpected end of response"};
     }
+    spdlog::debug("buffer {}, received {}", buffer.size(), received);
+    spdlog::debug("resp.beginOfBody: {}", resp.beginOfBody);
 
     parseMeta(buffer, resp.beginOfBody, resp);
     spdlog::debug("Response received: {}", resp.statusCode);
@@ -162,122 +179,191 @@ static Response do_request(BIO *bio, Request const& req)
     return resp;
 }
 
-static void connectBio(BIO *bio, Request const& req)
-{
-    auto const proxy = req.proxyServers.get(req);
-    Url const targetUrl = proxy ? *proxy : req.url;
-
-    if (BIO_set_conn_hostname(bio, targetUrl.host.c_str()) < 1) {
-        throw OpenSslError{"error BIO_set_conn_hostname"};
-    }
-    BIO_set_conn_port(bio, targetUrl.port.c_str());
-
-    if (BIO_do_connect(bio) < 1) {
-        throw OpenSslError{"error BIO_do_connect"};
+class HttpClient {
+public:
+    HttpClient(HttpVersion version, Proxy const& proxy, bool noVerify)
+        : version_{version}, proxy_{proxy}, noVerify_{noVerify}
+        , bio_{nullptr}, ssl_ctx_{nullptr}
+    {
     }
 
-    if (proxy && req.url.scheme == "https") {
-        // HTTPS proxy CONNECT only available in 1.1
-        Request proxyReq;
-        proxyReq.version = HttpVersion::VERSION_1_1;
-        proxyReq.method = "CONNECT";
-        proxyReq.url = *proxy;
-        proxyReq.connectAuthority = req.url;
-
-        auto const& resp = do_request(bio, proxyReq);
-
-        if (!resp.isSuccess()) {
-            // TODO: make a dedicated exception?
-            spdlog::error("Proxy server returned {} for CONNECT", resp.statusCode);
-            throw std::runtime_error{"proxy server refused"};
-        }
-    }
-}
-
-static Response request(std::string_view method, std::string_view urlString,
-                        Proxy const& proxy, HttpVersion httpVersion, bool noVerify)
-{
-    Url const url = parseUrl(urlString, "http");
-
-    Request req;
-    req.version = httpVersion;
-    req.url = url;
-    req.method = method;
-    req.proxyServers = proxy;
-
-    BIO *bio = BIO_new(BIO_s_connect());
-    if (bio == nullptr) {
-        throw OpenSslError{"error BIO_new"};
-    }
-    SCOPE_EXIT([&]{ BIO_free_all(bio); });
-
-    connectBio(bio, req);
-
-    // TODO: would be better to use one do_request for http/https
-    // this is now an early return basically due to SCOPE_EXIT of ctx
-    if (req.url.scheme == "http") {
-        return do_request(bio, req);
+    ~HttpClient()
+    {
+        this->clear();
     }
 
-    SSL_CTX *ctx = SSL_CTX_new(TLS_client_method());
-    if (ctx == nullptr) {
-        throw OpenSslError{"error SSL_CTX_new"};
-    }
-    SCOPE_EXIT([&]{ SSL_CTX_free(ctx); });
+    HttpClient(HttpClient const&) = delete;
+    HttpClient& operator=(HttpClient const&) = delete;
 
-    if (SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION) < 1) {
-        throw OpenSslError{"error SSL_CTX_set_min_proto_version"};
-    }
-    if (SSL_CTX_set_default_verify_paths(ctx) < 1) {
-        throw OpenSslError{"error SSL_CTX_set_default_verify_paths"};
-    }
+    Response request(std::string_view method, std::string_view urlString)
+    {
+        Url const url = parseUrl(urlString, "http");
 
-    BIO *ssl_bio = BIO_new_ssl(ctx, /*client*/1);
-    if (ssl_bio == nullptr) {
-        throw OpenSslError{"error BIO_new_ssl"};
-    }
+        // TODO: move to the end of current request?
+        switch (version_) {
+        case HttpVersion::VERSION_1_0:
+            this->clear();
+            break;
 
-    // FIXME: this works, but ugly and error-prone
-    // (bio) is now (ssl_bio -> bio)
-    bio = BIO_push(ssl_bio, bio);
+        case HttpVersion::VERSION_1_1:
+            if (lastUrl_.scheme != url.scheme) {
+                this->clear();
+            } else if (lastUrl_.authority() != url.authority()) {
+                // TODO: maybe as long as it's the same server, authority don't have to be the same?
 
-    SSL *ssl;
-    if (BIO_get_ssl(ssl_bio, &ssl) < 1) {
-        throw OpenSslError{"error BIO_get_ssl"};
-    }
-
-    // SNI
-    if (SSL_set_tlsext_host_name(ssl, req.url.host.c_str()) < 1) {
-        throw OpenSslError{"error SSL_set_tlsext_host_name"};
-    }
-
-    // this step will be done at I/O if omitted
-    if (BIO_do_handshake(bio) < 1) {
-        throw OpenSslError{"error BIO_do_handshake"};
-    }
-
-    if (!noVerify) {
-        auto const error = SSL_get_verify_result(ssl);
-        if (error != X509_V_OK) {
-            throw std::runtime_error{X509_verify_cert_error_string(error)};
+                if (url.scheme != "http" || !proxy_.get(url.scheme)) {
+                    this->clear();
+                }
+            }
+            break;
         }
 
-        // SSL_get_verify_result returns OK when no cert is available
-        auto *cert = SSL_get_peer_certificate(ssl);
-        if (cert == nullptr) {
-            throw std::runtime_error{"no certificate available"};
-        }
+        Request req;
+        req.version = version_;
+        req.url = url;
+        req.method = method;
+        req.proxy = proxy_.get(url.scheme);
 
-        // vaild certificate, but site mismatch
-        if (X509_check_host(cert, req.url.host.data(), req.url.host.size(), 0, nullptr) < 1) {
-            throw std::runtime_error{"host mismatch"};
-        }
+        try {
+            if (bio_ == nullptr) {
+                bio_ = BIO_new(BIO_s_connect());
+                if (bio_ == nullptr) {
+                    throw OpenSslError{"error BIO_new"};
+                }
+                this->connectBio(req);
+                lastUrl_ = url;
+            }
 
-        // TODO: revoked certificate
+            return do_request(bio_, req);
+        }
+        catch (std::exception const&) {
+            // won't be able to consume the response
+            this->clear();
+            throw;
+        }
     }
 
-    return do_request(bio, req);
-}
+private:
+    HttpVersion version_;
+    Proxy proxy_;
+    bool noVerify_;
+
+    BIO *bio_;
+    SSL_CTX *ssl_ctx_;
+
+    Url lastUrl_;
+
+    void clear()
+    {
+        lastUrl_ = Url{};
+
+        if (ssl_ctx_ != nullptr) {
+            SSL_CTX_free(ssl_ctx_);
+            ssl_ctx_ = nullptr;
+        }
+        if (bio_ != nullptr) {
+            BIO_free_all(bio_);
+            bio_ = nullptr;
+        }
+    }
+
+    void connectBio(Request const& req)
+    {
+        Url const targetUrl = req.proxy ? *req.proxy : req.url;
+
+        spdlog::info("Connecting to {}:{}", targetUrl.host, targetUrl.port);
+
+        if (BIO_set_conn_hostname(bio_, targetUrl.host.c_str()) < 1) {
+            throw OpenSslError{"error BIO_set_conn_hostname"};
+        }
+        BIO_set_conn_port(bio_, targetUrl.port.c_str());
+
+        if (BIO_do_connect(bio_) < 1) {
+            throw OpenSslError{"error BIO_do_connect"};
+        }
+
+        if (req.url.scheme == "https") {
+            this->connectHttps(req);
+        }
+    }
+
+    void connectHttps(Request const& req)
+    {
+        if (req.proxy) {
+            // HTTPS proxy CONNECT only available in 1.1
+            Request proxyReq;
+            proxyReq.version = HttpVersion::VERSION_1_1;
+            proxyReq.method = "CONNECT";
+            proxyReq.url = *req.proxy;
+            proxyReq.connectAuthority = req.url;
+
+            auto const& resp = do_request(bio_, proxyReq);
+
+            if (!resp.isSuccess()) {
+                // TODO: make a dedicated exception?
+                spdlog::error("Proxy server returned {} for CONNECT", resp.statusCode);
+                throw std::runtime_error{"proxy server refused"};
+            }
+        }
+
+        ssl_ctx_ = SSL_CTX_new(TLS_client_method());
+        if (ssl_ctx_ == nullptr) {
+            throw OpenSslError{"error SSL_CTX_new"};
+        }
+
+        if (SSL_CTX_set_min_proto_version(ssl_ctx_, TLS1_2_VERSION) < 1) {
+            throw OpenSslError{"error SSL_CTX_set_min_proto_version"};
+        }
+        if (SSL_CTX_set_default_verify_paths(ssl_ctx_) < 1) {
+            throw OpenSslError{"error SSL_CTX_set_default_verify_paths"};
+        }
+
+        BIO *ssl_bio = BIO_new_ssl(ssl_ctx_, /*client*/1);
+        if (ssl_bio == nullptr) {
+            throw OpenSslError{"error BIO_new_ssl"};
+        }
+
+        // FIXME: this works, but ugly and error-prone
+        // (bio) is now (ssl_bio -> bio)
+        bio_ = BIO_push(ssl_bio, bio_);
+
+        SSL *ssl;
+        if (BIO_get_ssl(ssl_bio, &ssl) < 1) {
+            throw OpenSslError{"error BIO_get_ssl"};
+        }
+
+        // SNI
+        if (SSL_set_tlsext_host_name(ssl, req.url.host.c_str()) < 1) {
+            throw OpenSslError{"error SSL_set_tlsext_host_name"};
+        }
+
+        // this step will be done at I/O if omitted
+        if (BIO_do_handshake(bio_) < 1) {
+            throw OpenSslError{"error BIO_do_handshake"};
+        }
+
+        if (!noVerify_) {
+            auto const error = SSL_get_verify_result(ssl);
+            if (error != X509_V_OK) {
+                throw std::runtime_error{X509_verify_cert_error_string(error)};
+            }
+
+            // SSL_get_verify_result returns OK when no cert is available
+            auto *cert = SSL_get_peer_certificate(ssl);
+            if (cert == nullptr) {
+                throw std::runtime_error{"no certificate available"};
+            }
+
+            // vaild certificate, but site mismatch
+            if (X509_check_host(cert, req.url.host.data(), req.url.host.size(), 0, nullptr) < 1) {
+                throw std::runtime_error{"host mismatch"};
+            }
+
+            // TODO: revoked certificate
+        }
+    }
+
+};
 
 static void dumpResponse(Response const& resp)
 {
@@ -335,8 +421,9 @@ try {
         proxy.set("https", url);
     }
 
-    // TODO: make a Session object
-    auto const resp = request("GET", url, proxy, version, noVerify);
+    HttpClient client{version, proxy, noVerify};
+
+    auto const resp = client.request("GET", url);
     dumpResponse(resp);
 }
 catch (std::exception const& e) {
