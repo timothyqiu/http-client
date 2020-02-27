@@ -2,6 +2,7 @@
 #define OHC_HTTP_HPP_
 
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -9,24 +10,30 @@
 
 enum class HttpVersion { VERSION_1_0, VERSION_1_1 };
 
+struct Request;
+
+class Proxy {
+public:
+    void set(std::string_view scheme, Url const& url);
+    std::optional<Url> get(Request const& req) const;
+
+private:
+    std::map<std::string, Url> servers;
+};
+
+// TODO: make this a class
 struct Request {
     HttpVersion version;  // should this be here?
 
     std::string method;
 
     Url url;
-    Url httpProxy;
-    Url httpsProxy;
+    Url connectAuthority;
 
-    // the host and port to connect to
-    std::string const& connectHost() const;
-    std::string const& connectPort() const;
+    Proxy proxyServers;
 
-    bool shouldUseHttpProxy() const;
-    bool shouldUseHttpsProxy() const;
-
+    std::string makeRequestUri() const;
     std::string makeMessage() const;
-    std::string makeHttpsProxyConnectMessage() const;
 };
 
 struct Response {

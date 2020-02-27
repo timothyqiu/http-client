@@ -11,9 +11,10 @@
 #include <vector>
 
 #include <CLI/CLI.hpp>
-#include <OpenSSL/bio.h>
-#include <OpenSSL/ssl.h>
+#include <openssl/bio.h>
+#include <openssl/ssl.h>
 #include <openssl/x509v3.h>
+#include <spdlog/spdlog.h>
 
 #include <ohc/exception.hpp>
 #include <ohc/http.hpp>
@@ -61,8 +62,7 @@ static void parseMeta(std::vector<char> const& buffer, size_t beginOfBody, Respo
                           match, pattern))
     {
         // TODO: make a dedicated exception, store instead of print
-        std::string const str{statusLine};  // %*s won't work, maybe bug in stdlib impl
-        std::fprintf(stderr, "%s\n", str.c_str());
+        spdlog::error("Bad status line: {}", statusLine);
         throw std::runtime_error{"Bad status line"};
     }
 
@@ -87,8 +87,7 @@ static void parseMeta(std::vector<char> const& buffer, size_t beginOfBody, Respo
         if (!std::regex_match(std::begin(line), std::end(line),
                               match, headerPattern))
         {
-            std::string const str{line};  // %*s won't work, maybe bug in stdlib impl
-            std::fprintf(stderr, "Bad header line: %s\n", str.c_str());
+            spdlog::warn("Bad header line: {}", line);
             continue;
         }
 
@@ -111,10 +110,10 @@ static void parseMeta(std::vector<char> const& buffer, size_t beginOfBody, Respo
     }
 }
 
-static Response do_request(BIO *bio, Request const& req, std::string_view message)
+static Response do_request(BIO *bio, Request const& req)
 {
-    // FIXME: only print when verbose
-    std::printf("<Begin of Message>%s<End of Message>\n", std::string{message}.c_str());
+    auto const& message = req.makeMessage();
+    spdlog::debug("Sending request:\n{}<EOM>", message);
 
     size_t sent = 0;
     while (sent < message.size()) {
@@ -145,17 +144,18 @@ static Response do_request(BIO *bio, Request const& req, std::string_view messag
     }
 
     if (resp.beginOfBody == 0) {
-        std::fprintf(stderr, "Raw response: %s\n", std::string{std::begin(buffer), std::begin(buffer) + received}.c_str());
+        spdlog::error("Unexpected end of response: %s", std::string{std::begin(buffer), std::begin(buffer) + received});
         throw std::runtime_error{"unexpected end of response"};
     }
 
     parseMeta(buffer, resp.beginOfBody, resp);
+    spdlog::debug("Response received: {}", resp.statusCode);
 
     size_t const bodySize = req.method == "HEAD" ? 0 : resp.contentLength;
     while (received < (resp.beginOfBody + bodySize) && receiveData(bio, buffer, received)) {
     }
     if (received < (resp.beginOfBody + bodySize)) {
-        std::fprintf(stderr, "Expected body size: %zu != %zu\n", bodySize, received - resp.beginOfBody);
+        spdlog::error("Expected body size to be {}, actual {}", bodySize, received - resp.beginOfBody);
         throw std::runtime_error{"unexpceted end of body"};
     }
 
@@ -164,19 +164,38 @@ static Response do_request(BIO *bio, Request const& req, std::string_view messag
 
 static void connectBio(BIO *bio, Request const& req)
 {
-    if (BIO_set_conn_hostname(bio, req.connectHost().c_str()) < 1) {
+    auto const proxy = req.proxyServers.get(req);
+    Url const targetUrl = proxy ? *proxy : req.url;
+
+    if (BIO_set_conn_hostname(bio, targetUrl.host.c_str()) < 1) {
         throw OpenSslError{"error BIO_set_conn_hostname"};
     }
-    BIO_set_conn_port(bio, req.connectPort().c_str());
+    BIO_set_conn_port(bio, targetUrl.port.c_str());
 
     if (BIO_do_connect(bio) < 1) {
         throw OpenSslError{"error BIO_do_connect"};
     }
+
+    if (proxy && req.url.scheme == "https") {
+        // HTTPS proxy CONNECT only available in 1.1
+        Request proxyReq;
+        proxyReq.version = HttpVersion::VERSION_1_1;
+        proxyReq.method = "CONNECT";
+        proxyReq.url = *proxy;
+        proxyReq.connectAuthority = req.url;
+
+        auto const& resp = do_request(bio, proxyReq);
+
+        if (!resp.isSuccess()) {
+            // TODO: make a dedicated exception?
+            spdlog::error("Proxy server returned {} for CONNECT", resp.statusCode);
+            throw std::runtime_error{"proxy server refused"};
+        }
+    }
 }
 
 static Response request(std::string_view method, std::string_view urlString,
-                        std::string_view httpProxy, std::string_view httpsProxy,
-                        HttpVersion httpVersion, bool noVerify)
+                        Proxy const& proxy, HttpVersion httpVersion, bool noVerify)
 {
     Url const url = parseUrl(urlString, "http");
 
@@ -184,19 +203,7 @@ static Response request(std::string_view method, std::string_view urlString,
     req.version = httpVersion;
     req.url = url;
     req.method = method;
-
-    if (!httpProxy.empty()) {
-        req.httpProxy = parseUrl(httpProxy, "http");
-        if (req.httpProxy.scheme != "http") {
-            throw std::runtime_error{"proxy server using non-http scheme not supported"};
-        }
-    }
-    if (!httpsProxy.empty()) {
-        req.httpsProxy = parseUrl(httpsProxy, "http");
-        if (req.httpsProxy.scheme != "http") {
-            throw std::runtime_error{"proxy server using non-http scheme not supported"};
-        }
-    }
+    req.proxyServers = proxy;
 
     BIO *bio = BIO_new(BIO_s_connect());
     if (bio == nullptr) {
@@ -209,21 +216,7 @@ static Response request(std::string_view method, std::string_view urlString,
     // TODO: would be better to use one do_request for http/https
     // this is now an early return basically due to SCOPE_EXIT of ctx
     if (req.url.scheme == "http") {
-        return do_request(bio, req, req.makeMessage());
-    }
-
-    // just in case...
-    assert(req.url.scheme == "https");
-    assert(req.version == HttpVersion::VERSION_1_1);
-
-    if (req.shouldUseHttpsProxy()) {
-        auto const& resp = do_request(bio, req, req.makeHttpsProxyConnectMessage());
-
-        if (!resp.isSuccess()) {
-            std::fprintf(stderr, "Proxy server error response:\n%s\n",
-                         std::string{std::begin(resp.raw), std::end(resp.raw)}.c_str());
-            throw std::runtime_error{"proxy server refused"};
-        }
+        return do_request(bio, req);
     }
 
     SSL_CTX *ctx = SSL_CTX_new(TLS_client_method());
@@ -283,7 +276,17 @@ static Response request(std::string_view method, std::string_view urlString,
         // TODO: revoked certificate
     }
 
-    return do_request(bio, req, req.makeMessage());
+    return do_request(bio, req);
+}
+
+static void dumpResponse(Response const& resp)
+{
+    std::printf("Status: %d\n", resp.statusCode);
+    std::printf("Headers:\n");
+    for (auto const& e : resp.headers) {
+        std::printf("\t%s = %s\n", e.first.c_str(), e.second.c_str());
+    }
+    std::printf("Body:\n%s", std::string{resp.raw.data() + resp.beginOfBody, resp.contentLength}.c_str());
 }
 
 int main(int argc, char *argv[])
@@ -309,20 +312,34 @@ try {
     bool noVerify{false};
     app.add_flag("--no-verify", noVerify, "Skip HTTPS certificate verification");
 
+    bool isVerbose{false};
+    app.add_flag("--verbose", isVerbose, "Make the operation more talkative");
+
     CLI11_PARSE(app, argc, argv);
 
-    // TODO: make a Session object
-    auto const resp = request("GET", url, httpProxy, httpsProxy, version, noVerify);
+    spdlog::set_level(isVerbose ? spdlog::level::debug : spdlog::level::warn);
 
-    std::printf("Status: %d\n", resp.statusCode);
-    std::printf("Headers:\n");
-    for (auto const& e : resp.headers) {
-        std::printf("\t%s = %s\n", e.first.c_str(), e.second.c_str());
+    Proxy proxy;
+    if (!httpProxy.empty()) {
+        auto const& url = parseUrl(httpProxy, "http");
+        if (url.scheme != "http") {
+            throw std::runtime_error{"proxy server using non-http scheme not supported"};
+        }
+        proxy.set("http", url);
     }
-    std::printf("<Begin of Body>%s<End of Body>\n",
-                std::string{resp.raw.data() + resp.beginOfBody, resp.contentLength}.c_str());
+    if (!httpsProxy.empty()) {
+        auto const& url = parseUrl(httpsProxy, "http");
+        if (url.scheme != "http") {
+            throw std::runtime_error{"proxy server using non-http scheme not supported"};
+        }
+        proxy.set("https", url);
+    }
+
+    // TODO: make a Session object
+    auto const resp = request("GET", url, proxy, version, noVerify);
+    dumpResponse(resp);
 }
 catch (std::exception const& e) {
-    std::fprintf(stderr, "Exception: %s\n", e.what());
+    spdlog::error("Exception: {}", e.what());
     return EXIT_FAILURE;
 }

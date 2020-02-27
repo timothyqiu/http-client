@@ -1,44 +1,43 @@
 #include <ohc/http.hpp>
 #include <cassert>
 
-std::string const& Request::connectHost() const {
-    if (shouldUseHttpProxy()) {
-        return httpProxy.host;
+void Proxy::set(std::string_view scheme, Url const& url)
+{
+    assert(scheme == "http" || scheme == "https");
+
+    if (url.host.empty()) {
+        throw std::runtime_error{std::string{scheme} + " proxy missing host"};
     }
-    if (shouldUseHttpsProxy()) {
-        return httpsProxy.host;
+    if (url.port.empty()) {
+        throw std::runtime_error{std::string{scheme} + " proxy missing port"};
     }
-    return url.host;
+
+    servers[std::string{scheme}] = url;
 }
 
-std::string const& Request::connectPort() const {
-    if (shouldUseHttpProxy()) {
-        return httpProxy.port;
+std::optional<Url> Proxy::get(Request const& req) const
+{
+    auto const iter = servers.find(req.url.scheme);
+    if (iter == std::end(servers)) {
+        return {};
     }
-    if (shouldUseHttpsProxy()) {
-        return httpsProxy.port;
-    }
-    return url.port;
+    return iter->second;
 }
 
-bool Request::shouldUseHttpProxy() const {
-    return url.scheme == "http" && !httpProxy.host.empty() && !httpProxy.port.empty();
-}
-
-bool Request::shouldUseHttpsProxy() const {
-    switch (version) {
-    case HttpVersion::VERSION_1_0:
-        return false;
-    default:
-        break;
+std::string Request::makeRequestUri() const
+{
+    if (method == "CONNECT") {
+        assert(!connectAuthority.host.empty() && !connectAuthority.port.empty());
+        return connectAuthority.host + ":" + connectAuthority.port;
     }
-    return url.scheme == "https" && !httpsProxy.host.empty() && !httpsProxy.port.empty();
+    if (url.scheme == "http" && proxyServers.get(*this)) {
+        return absoluteUrlString(url);
+    }
+    return relativeUrlString(url);
 }
 
 std::string Request::makeMessage() const
 {
-    auto const requestUri = shouldUseHttpProxy() ? absoluteUrlString(url) : relativeUrlString(url);
-
     std::string versionMark;
     std::string header;
 
@@ -53,13 +52,7 @@ std::string Request::makeMessage() const
         break;
     }
 
-    return method + " " + requestUri + " " + versionMark +"\r\n" + header + "\r\n";
-}
-
-std::string Request::makeHttpsProxyConnectMessage() const
-{
-    assert(version == HttpVersion::VERSION_1_1);
-    return "CONNECT " + url.host + ":" + url.port + " HTTP/1.1\r\nHost: " + httpsProxy.host + "\r\n\r\n";
+    return method + " " + makeRequestUri() + " " + versionMark +"\r\n" + header + "\r\n";
 }
 
 bool Response::isSuccess() const

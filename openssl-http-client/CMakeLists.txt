@@ -25,7 +25,12 @@ FetchContent_Declare(
   GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
   GIT_TAG v1.9.0
 )
-FetchContent_MakeAvailable(cli11)
+FetchContent_Declare(
+  spdlog
+  GIT_REPOSITORY https://github.com/gabime/spdlog.git
+  GIT_TAG v1.5.0
+)
+FetchContent_MakeAvailable(cli11 spdlog)
 
 add_subdirectory(src)
 add_subdirectory(apps)

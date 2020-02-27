@@ -1,6 +1,6 @@
 #include <ohc/exception.hpp>
 
-#include <OpenSSL/err.h>
+#include <openssl/err.h>
 
 OpenSslError::OpenSslError(char const *message)
     : std::runtime_error{message}
