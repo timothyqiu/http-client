@@ -38,10 +38,12 @@ struct Request {
 
 struct Response {
     std::vector<char> raw;
+    std::vector<char> body;
     int statusCode;
     std::map<std::string, std::string> headers;
     size_t beginOfBody;
-    size_t contentLength;
+
+    std::string transferEncoding;
 
     bool isSuccess() const;
 };

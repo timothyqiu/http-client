@@ -102,26 +102,15 @@ static void parseMeta(std::vector<char> const& buffer, size_t beginOfBody, Respo
         n = headerBlock.find("\r\n", beginOfNextHeader);
     }
 
-    if (resp.statusCode / 100 == 1 || resp.statusCode == 204 || resp.statusCode == 304) {
-        resp.contentLength = 0;
+    if (auto const iter = resp.headers.find("transfer-encoding"); iter != std::end(resp.headers)) {
+        // FIXME: should allow multiple transfer-encoding headers
+        std::string transferEncoding{iter->second};
+        std::transform(std::begin(transferEncoding), std::end(transferEncoding),
+                       std::begin(transferEncoding),
+                       [](char c) { return std::tolower(c); });
+        resp.transferEncoding = transferEncoding;
     } else {
-        if (auto const iter = resp.headers.find("transfer-encoding"); iter != std::end(resp.headers)) {
-            // TODO: handle chunked transfer encoding
-            std::string transferEncoding{iter->second};
-            std::transform(std::begin(transferEncoding), std::end(transferEncoding),
-                           std::begin(transferEncoding),
-                           [](char c) { return std::tolower(c); });
-            if (transferEncoding != "identity") {
-                throw std::runtime_error{"unsupported transfer encoding: " + transferEncoding};
-            }
-        }
-
-        if (auto const iter = resp.headers.find("content-length"); iter != std::end(resp.headers)) {
-            resp.contentLength = std::stoul(iter->second);
-        } else {
-            // should an empty value land here too?
-            resp.contentLength = 0;
-        }
+        resp.transferEncoding = "identity";
     }
 }
 
@@ -162,18 +151,108 @@ static Response do_request(BIO *bio, Request const& req)
         spdlog::error("Unexpected end of response: %s", std::string{std::begin(buffer), std::begin(buffer) + received});
         throw std::runtime_error{"unexpected end of response"};
     }
-    spdlog::debug("buffer {}, received {}", buffer.size(), received);
-    spdlog::debug("resp.beginOfBody: {}", resp.beginOfBody);
 
     parseMeta(buffer, resp.beginOfBody, resp);
     spdlog::debug("Response received: {}", resp.statusCode);
 
-    size_t const bodySize = req.method == "HEAD" ? 0 : resp.contentLength;
-    while (received < (resp.beginOfBody + bodySize) && receiveData(bio, buffer, received)) {
-    }
-    if (received < (resp.beginOfBody + bodySize)) {
-        spdlog::error("Expected body size to be {}, actual {}", bodySize, received - resp.beginOfBody);
-        throw std::runtime_error{"unexpceted end of body"};
+    auto const emptyBody = (resp.statusCode / 100 == 1 || resp.statusCode == 204 || resp.statusCode == 304 || req.method == "HEAD");
+    if (!emptyBody) {
+
+        if (resp.transferEncoding == "identity") {
+
+            size_t bodySize;
+
+            if (auto const iter = resp.headers.find("content-length"); iter != std::end(resp.headers)) {
+                bodySize = std::stoul(iter->second);
+            } else {
+                // should an empty value land here too?
+                bodySize = 0;
+            }
+
+            while (received < (resp.beginOfBody + bodySize) && receiveData(bio, buffer, received)) {
+            }
+            if (received < (resp.beginOfBody + bodySize)) {
+                spdlog::error("Expected body size to be {}, actual {}", bodySize, received - resp.beginOfBody);
+                throw std::runtime_error{"unexpceted end of body"};
+            }
+
+            resp.body.assign(buffer.data() + resp.beginOfBody, buffer.data() + resp.beginOfBody + bodySize);
+
+        } else if (resp.transferEncoding == "chunked") {
+
+            std::regex const chunkHeaderPattern{R"regex(\s*([a-fA-F0-9]+)\s*(;.*)?)regex"};
+            std::match_results<std::string_view::const_iterator> match;  // regex lack of string view support
+
+            auto beginOfChunk = resp.beginOfBody;
+            size_t endOfAllChunks = 0;
+            while (true) {
+                std::string_view view{buffer.data() + beginOfChunk, received - beginOfChunk};
+                auto const n = view.find("\r\n");
+                if (n == view.npos) {
+                    if (!receiveData(bio, buffer, received)) {
+                        break;
+                    }
+                    continue;
+                }
+
+                std::string_view header{view.data(), n};
+                if (!std::regex_match(std::begin(header), std::end(header),
+                                      match, chunkHeaderPattern))
+                {
+                    // TODO: make a dedicated exception, store instead of print
+                    spdlog::error("Bad chunk header: {}", header);
+                    throw std::runtime_error{"bad chunk header"};
+                }
+
+                size_t const chunkSize = std::stoul(match.str(1), nullptr, 16);
+                spdlog::debug("Chunk size: {} / {}", chunkSize, header);
+
+                if (chunkSize == 0) {
+                    endOfAllChunks = beginOfChunk + n + 2;
+                    break;
+                }
+
+                auto const chunkTotalSize = n + 2 + chunkSize + 2;
+                if (beginOfChunk + chunkTotalSize > received) {
+                    if (!receiveData(bio, buffer, received)) {
+                        break;
+                    }
+                    continue;
+                }
+
+                resp.body.insert(std::end(resp.body),
+                                 buffer.data() + beginOfChunk + n + 2,
+                                 buffer.data() + beginOfChunk + n + 2 + chunkSize);
+
+                beginOfChunk += chunkTotalSize;
+            }
+
+            if (endOfAllChunks == 0) {
+                throw std::runtime_error{"unexpected end of chunks"};
+            }
+
+            // TODO: make use of trailing headers
+            size_t beginOfCurrentHeader = 0;
+            while (true) {
+                auto const offset = endOfAllChunks + beginOfCurrentHeader;
+                std::string_view headerBlock{buffer.data() + offset, received - offset};
+                auto const n = headerBlock.find("\r\n");
+                if (n == headerBlock.npos) {
+                    if (!receiveData(bio, buffer, received)) {
+                        throw std::runtime_error{"unexpected end of response"};
+                    }
+                    continue;
+                }
+                if (n == 0) {
+                    break;
+                }
+                spdlog::debug("Trailing header: {}", std::string_view{headerBlock.data(), n});
+                beginOfCurrentHeader += (n + 2);
+            }
+
+        } else {
+            throw std::runtime_error{"unsupported transfer encoding: " + resp.transferEncoding};
+        }
     }
 
     return resp;
@@ -372,7 +451,7 @@ static void dumpResponse(Response const& resp)
     for (auto const& e : resp.headers) {
         std::printf("\t%s = %s\n", e.first.c_str(), e.second.c_str());
     }
-    std::printf("Body:\n%s", std::string{resp.raw.data() + resp.beginOfBody, resp.contentLength}.c_str());
+    std::printf("Body:\n%s", std::string{std::begin(resp.body), std::end(resp.body)}.c_str());
 }
 
 int main(int argc, char *argv[])
