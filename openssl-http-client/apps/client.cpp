@@ -171,10 +171,8 @@ public:
     HttpClient(HttpClient const&) = delete;
     HttpClient& operator=(HttpClient const&) = delete;
 
-    Response request(std::string_view method, std::string_view urlString)
+    Response request(std::string_view method, Url const& url)
     {
-        Url const url = parseUrl(urlString, "http");
-
         // TODO: move to the end of current request?
         switch (version_) {
         case HttpVersion::VERSION_1_0:
@@ -374,6 +372,9 @@ try {
     bool noVerify{false};
     app.add_flag("--no-verify", noVerify, "Skip HTTPS certificate verification");
 
+    bool isFollow{false};
+    app.add_flag("-L,--location", isFollow, "Follow redirects");
+
     bool isVerbose{false};
     app.add_flag("--verbose", isVerbose, "Make the operation more talkative");
 
@@ -399,8 +400,28 @@ try {
 
     HttpClient client{version, proxy, noVerify};
 
-    auto const resp = client.request("GET", url);
-    dumpResponse(resp);
+    Url requestUrl = parseUrl(url, "http");
+    while (true) {
+        auto const resp = client.request("GET", requestUrl);
+
+        if (isFollow && (resp.statusCode == 301 || resp.statusCode == 302 || resp.statusCode == 303)) {
+            // TODO: don't redirect if non-GET
+            auto const location = resp.headers.at("location");
+            spdlog::debug("Redirect to: {}", location);
+            auto next = parseUrl(location);
+            if (next.isRelative()) {
+                next.scheme = requestUrl.scheme;
+                next.userinfo = requestUrl.userinfo;
+                next.host = requestUrl.host;
+                next.port = requestUrl.port;
+            }
+            requestUrl = next;
+            continue;
+        }
+
+        dumpResponse(resp);
+        break;
+    }
 }
 catch (std::exception const& e) {
     spdlog::error("Exception: {}", e.what());

@@ -12,6 +12,11 @@ std::string Url::authority() const
     return host + ":" + port;
 }
 
+bool Url::isRelative() const
+{
+    return host.empty();
+}
+
 // TODO: some optimization? use static object?
 static std::string portFromScheme(std::string_view scheme)
 {

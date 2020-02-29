@@ -14,6 +14,8 @@ struct Url {
     std::string fragment;
 
     std::string authority() const;  // without userinfo
+
+    bool isRelative() const;
 };
 
 Url parseUrl(std::string_view view, std::string_view defaultScheme={});
