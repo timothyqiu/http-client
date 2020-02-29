@@ -1,6 +1,8 @@
 #ifndef OHC_HTTP_HPP_
 #define OHC_HTTP_HPP_
 
+#include <cstddef>
+#include <cstdint>
 #include <map>
 #include <optional>
 #include <string>
@@ -37,8 +39,7 @@ struct Request {
 };
 
 struct Response {
-    std::vector<char> raw;
-    std::vector<char> body;
+    std::vector<uint8_t> body;
     int statusCode;
     std::map<std::string, std::string> headers;
     size_t beginOfBody;

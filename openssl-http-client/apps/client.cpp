@@ -8,7 +8,6 @@
 #include <regex>
 #include <string>
 #include <string_view>
-#include <vector>
 
 #include <CLI/CLI.hpp>
 #include <openssl/bio.h>
@@ -16,144 +15,82 @@
 #include <openssl/x509v3.h>
 #include <spdlog/spdlog.h>
 
+#include <ohc/bio.hpp>
 #include <ohc/exception.hpp>
 #include <ohc/http.hpp>
 #include <ohc/url.hpp>
 
-#include "scope_guard.hpp"
-
 static_assert(OPENSSL_VERSION_NUMBER >= 0x10100000L, "Use OpenSSL version 1.0.1 or later");
 
-
-// TODO: get rid of the ugly bool
-static bool receiveData(BIO *bio, std::vector<char>& buffer, size_t& received)
+static std::string toLower(std::string_view view)
 {
-    size_t const minimumAvailable = 128;
-    if (buffer.size() < received + minimumAvailable) {
-        buffer.resize(std::max(buffer.size() * 2, buffer.size() + minimumAvailable));
-    }
-
-    int const n = BIO_read(bio, buffer.data() + received, buffer.size() - received);
-    if (n < 1) {
-        if (BIO_should_retry(bio)) {
-            return receiveData(bio, buffer, received);
-        }
-        if (n == 0) {  // TODO: Is this reasonable?
-            return false;
-        }
-        throw OpenSslError{"error receiving response"};
-    }
-    received += n;
-    return true;
+    std::string result{view};
+    std::transform(std::begin(result), std::end(result),
+                   std::begin(result),
+                   [](char c) { return std::tolower(c); });
+    return result;
 }
 
-static void parseMeta(std::vector<char> const& buffer, size_t beginOfBody, Response& resp)
-{
-    std::string_view view{buffer.data(), beginOfBody};
-
-    auto const endOfStatus = view.find("\r\n");
-    assert(endOfStatus != view.npos);  // use this after receiving the status line
-
-    std::string_view statusLine{buffer.data(), endOfStatus};
-    std::regex const pattern{R"regex(HTTP/\d+\.\d+\s+(\d\d\d)\s+.*)regex"};
-
-    std::match_results<std::string_view::const_iterator> match;  // regex lack of string view support
-    if (!std::regex_match(std::begin(statusLine), std::end(statusLine),
-                          match, pattern))
-    {
-        // TODO: make a dedicated exception, store instead of print
-        spdlog::error("Bad status line: {}", statusLine);
-        throw std::runtime_error{"Bad status line"};
-    }
-
-    resp.statusCode = std::stoi(match.str(1));
-
-    size_t const sepSize = 2;
-
-    auto const beginOfHeaders = endOfStatus + sepSize;
-    auto const endOfHeaders = beginOfBody - sepSize;  // so that every line is a valid header
-    std::string_view headerBlock{buffer.data() + beginOfHeaders, endOfHeaders - beginOfHeaders};
-
-    resp.headers.clear();
-
-    std::regex const headerPattern{R"regex(\s*([^:]*)\s*:\s*(.*)\s*)regex"};
-
-    size_t beginOfNextHeader = 0;
-    size_t n = headerBlock.find("\r\n", beginOfNextHeader);
-    while (n != headerBlock.npos) {
-        std::string_view line{buffer.data() + beginOfHeaders + beginOfNextHeader, n - beginOfNextHeader};
-
-        std::match_results<std::string_view::const_iterator> match;
-        if (!std::regex_match(std::begin(line), std::end(line),
-                              match, headerPattern))
-        {
-            spdlog::warn("Bad header line: {}", line);
-            continue;
-        }
-
-        std::string name = match.str(1);
-        std::transform(std::begin(name), std::end(name),
-                       std::begin(name),
-                       [](char c) { return std::tolower(c); });
-
-        resp.headers[name] = match.str(2);
-
-        beginOfNextHeader = n + sepSize;
-        n = headerBlock.find("\r\n", beginOfNextHeader);
-    }
-
-    if (auto const iter = resp.headers.find("transfer-encoding"); iter != std::end(resp.headers)) {
-        // FIXME: should allow multiple transfer-encoding headers
-        std::string transferEncoding{iter->second};
-        std::transform(std::begin(transferEncoding), std::end(transferEncoding),
-                       std::begin(transferEncoding),
-                       [](char c) { return std::tolower(c); });
-        resp.transferEncoding = transferEncoding;
-    } else {
-        resp.transferEncoding = "identity";
-    }
-}
-
-static Response do_request(BIO *bio, Request const& req)
+static Response makeRequest(BIO *bio, Request const& req)
 {
     auto const& message = req.makeMessage();
     spdlog::debug("Sending request:\n{}<EOM>", message);
 
-    size_t sent = 0;
-    while (sent < message.size()) {
-        int const n = BIO_write(bio, message.data() + sent, message.size() - sent);
-        if (n < 1) {
-            throw OpenSslError{"error sending request"};
-        }
-        sent += n;
-    }
+    writeString(bio, message);
 
     Response resp;
 
-    std::vector<char>& buffer = resp.raw;
-    size_t received = 0;
+    BioBuffer buffer{bio};
 
-    resp.beginOfBody = 0;
-    while (receiveData(bio, buffer, received)) {
-        std::string_view view{buffer.data(), received};
+    // regex lack of string view support
+    using string_view_match_result = std::match_results<std::string_view::const_iterator>;
 
-        // a null line separates headers and body
-        // although this approach is not friendly with Simple-Response
-        // which body is the response
-        auto const n = view.find("\r\n\r\n");
-        if (n != view.npos) {
-            resp.beginOfBody = n + 4;
+    // first line should be status line, since http 1.0
+    {
+        auto const line = buffer.readLine();
+
+        std::regex const pattern{R"regex(HTTP/\d+\.\d+\s+(\d\d\d)\s+.*)regex"};
+        string_view_match_result match;
+        if (!std::regex_match(std::begin(line), std::end(line),
+                              match, pattern))
+        {
+            // TODO: make a dedicated exception, store instead of print
+            spdlog::error("Bad status line: {}", line);
+            throw std::runtime_error{"bad status line"};
+        }
+        resp.statusCode = std::stoi(match.str(1));
+        spdlog::debug("Status code received: {}", resp.statusCode);
+    }
+
+    std::regex const headerPattern{R"regex(\s*([^:]*)\s*:\s*(.*)\s*)regex"};
+    while (true) {
+        auto const line = buffer.readLine();
+
+        if (line.empty()) {
             break;
         }
+
+        string_view_match_result match;
+        if (!std::regex_match(std::begin(line), std::end(line),
+                              match, headerPattern))
+        {
+            // TODO: make a dedicated exception, store instead of print
+            spdlog::warn("Bad header line: {}", line);
+            continue;
+        }
+
+        std::string name = toLower(match.str(1));
+
+        // FIXME: should handle duplicated headers
+        resp.headers[name] = match.str(2);
     }
 
-    if (resp.beginOfBody == 0) {
-        spdlog::error("Unexpected end of response: %s", std::string{std::begin(buffer), std::begin(buffer) + received});
-        throw std::runtime_error{"unexpected end of response"};
+    if (auto const iter = resp.headers.find("transfer-encoding"); iter != std::end(resp.headers)) {
+        // FIXME: should allow multiple transfer-encoding headers
+        resp.transferEncoding = toLower(iter->second);
+    } else {
+        resp.transferEncoding = "identity";
     }
-
-    parseMeta(buffer, resp.beginOfBody, resp);
-    spdlog::debug("Response received: {}", resp.statusCode);
 
     auto const emptyBody = (resp.statusCode / 100 == 1 || resp.statusCode == 204 || resp.statusCode == 304 || req.method == "HEAD");
     if (!emptyBody) {
@@ -161,93 +98,53 @@ static Response do_request(BIO *bio, Request const& req)
         if (resp.transferEncoding == "identity") {
 
             size_t bodySize;
-
             if (auto const iter = resp.headers.find("content-length"); iter != std::end(resp.headers)) {
                 bodySize = std::stoul(iter->second);
             } else {
                 // should an empty value land here too?
                 bodySize = 0;
             }
-
-            while (received < (resp.beginOfBody + bodySize) && receiveData(bio, buffer, received)) {
-            }
-            if (received < (resp.beginOfBody + bodySize)) {
-                spdlog::error("Expected body size to be {}, actual {}", bodySize, received - resp.beginOfBody);
-                throw std::runtime_error{"unexpceted end of body"};
-            }
-
-            resp.body.assign(buffer.data() + resp.beginOfBody, buffer.data() + resp.beginOfBody + bodySize);
+            resp.body = buffer.readAsVector(bodySize);
 
         } else if (resp.transferEncoding == "chunked") {
 
             std::regex const chunkHeaderPattern{R"regex(\s*([a-fA-F0-9]+)\s*(;.*)?)regex"};
-            std::match_results<std::string_view::const_iterator> match;  // regex lack of string view support
+            string_view_match_result match;
 
-            auto beginOfChunk = resp.beginOfBody;
-            size_t endOfAllChunks = 0;
             while (true) {
-                std::string_view view{buffer.data() + beginOfChunk, received - beginOfChunk};
-                auto const n = view.find("\r\n");
-                if (n == view.npos) {
-                    if (!receiveData(bio, buffer, received)) {
-                        break;
-                    }
-                    continue;
-                }
+                auto const line = buffer.readLine();
 
-                std::string_view header{view.data(), n};
-                if (!std::regex_match(std::begin(header), std::end(header),
+                if (!std::regex_match(std::begin(line), std::end(line),
                                       match, chunkHeaderPattern))
                 {
                     // TODO: make a dedicated exception, store instead of print
-                    spdlog::error("Bad chunk header: {}", header);
+                    spdlog::error("Bad chunk header: {}", line);
                     throw std::runtime_error{"bad chunk header"};
                 }
 
                 size_t const chunkSize = std::stoul(match.str(1), nullptr, 16);
-                spdlog::debug("Chunk size: {} / {}", chunkSize, header);
+                spdlog::debug("Chunk size: {}", chunkSize);
 
                 if (chunkSize == 0) {
-                    endOfAllChunks = beginOfChunk + n + 2;
                     break;
                 }
 
-                auto const chunkTotalSize = n + 2 + chunkSize + 2;
-                if (beginOfChunk + chunkTotalSize > received) {
-                    if (!receiveData(bio, buffer, received)) {
-                        break;
-                    }
-                    continue;
-                }
+                auto const& chunk = buffer.readAsVector(chunkSize);
 
                 resp.body.insert(std::end(resp.body),
-                                 buffer.data() + beginOfChunk + n + 2,
-                                 buffer.data() + beginOfChunk + n + 2 + chunkSize);
+                                 std::begin(chunk), std::end(chunk));
 
-                beginOfChunk += chunkTotalSize;
-            }
-
-            if (endOfAllChunks == 0) {
-                throw std::runtime_error{"unexpected end of chunks"};
+                buffer.dropLiteral("\r\n");
             }
 
             // TODO: make use of trailing headers
-            size_t beginOfCurrentHeader = 0;
             while (true) {
-                auto const offset = endOfAllChunks + beginOfCurrentHeader;
-                std::string_view headerBlock{buffer.data() + offset, received - offset};
-                auto const n = headerBlock.find("\r\n");
-                if (n == headerBlock.npos) {
-                    if (!receiveData(bio, buffer, received)) {
-                        throw std::runtime_error{"unexpected end of response"};
-                    }
-                    continue;
-                }
-                if (n == 0) {
+                auto const line = buffer.readLine();
+
+                if (line.empty()) {
                     break;
                 }
-                spdlog::debug("Trailing header: {}", std::string_view{headerBlock.data(), n});
-                beginOfCurrentHeader += (n + 2);
+                spdlog::debug("Trailing header: {}", line);
             }
 
         } else {
@@ -313,7 +210,7 @@ public:
                 lastUrl_ = url;
             }
 
-            return do_request(bio_, req);
+            return makeRequest(bio_, req);
         }
         catch (std::exception const&) {
             // won't be able to consume the response
@@ -376,7 +273,7 @@ private:
             proxyReq.url = *req.proxy;
             proxyReq.connectAuthority = req.url;
 
-            auto const& resp = do_request(bio_, proxyReq);
+            auto const& resp = makeRequest(bio_, proxyReq);
 
             if (!resp.isSuccess()) {
                 // TODO: make a dedicated exception?
