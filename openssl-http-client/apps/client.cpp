@@ -1,11 +1,6 @@
-#include <algorithm>
-#include <cassert>
-#include <cctype>
 #include <cstdio>
 #include <cstdlib>
 #include <exception>
-#include <map>
-#include <regex>
 #include <string>
 #include <string_view>
 
@@ -15,145 +10,10 @@
 #include <openssl/x509v3.h>
 #include <spdlog/spdlog.h>
 
-#include <ohc/bio.hpp>
-#include <ohc/exception.hpp>
 #include <ohc/http.hpp>
 #include <ohc/url.hpp>
 
-static_assert(OPENSSL_VERSION_NUMBER >= 0x10100000L, "Use OpenSSL version 1.0.1 or later");
-
-static std::string toLower(std::string_view view)
-{
-    std::string result{view};
-    std::transform(std::begin(result), std::end(result),
-                   std::begin(result),
-                   [](char c) { return std::tolower(c); });
-    return result;
-}
-
-static Response makeRequest(BIO *bio, Request const& req)
-{
-    auto const& message = req.makeMessage();
-    spdlog::debug("Sending request:\n{}<EOM>", message);
-
-    writeString(bio, message);
-
-    Response resp;
-
-    BioBuffer buffer{bio};
-
-    // regex lack of string view support
-    using string_view_match_result = std::match_results<std::string_view::const_iterator>;
-
-    // first line should be status line, since http 1.0
-    {
-        auto const line = buffer.readLine();
-
-        std::regex const pattern{R"regex(HTTP/\d+\.\d+\s+(\d\d\d)\s+.*)regex"};
-        string_view_match_result match;
-        if (!std::regex_match(std::begin(line), std::end(line),
-                              match, pattern))
-        {
-            // TODO: make a dedicated exception, store instead of print
-            spdlog::error("Bad status line: {}", line);
-            throw std::runtime_error{"bad status line"};
-        }
-        resp.statusCode = std::stoi(match.str(1));
-        spdlog::debug("Status code received: {}", resp.statusCode);
-    }
-
-    std::regex const headerPattern{R"regex(\s*([^:]*)\s*:\s*(.*)\s*)regex"};
-    while (true) {
-        auto const line = buffer.readLine();
-
-        if (line.empty()) {
-            break;
-        }
-
-        string_view_match_result match;
-        if (!std::regex_match(std::begin(line), std::end(line),
-                              match, headerPattern))
-        {
-            // TODO: make a dedicated exception, store instead of print
-            spdlog::warn("Bad header line: {}", line);
-            continue;
-        }
-
-        std::string name = toLower(match.str(1));
-
-        // FIXME: should handle duplicated headers
-        resp.headers[name] = match.str(2);
-    }
-
-    if (auto const iter = resp.headers.find("transfer-encoding"); iter != std::end(resp.headers)) {
-        // FIXME: should allow multiple transfer-encoding headers
-        resp.transferEncoding = toLower(iter->second);
-    } else {
-        resp.transferEncoding = "identity";
-    }
-
-    auto const emptyBody = (resp.statusCode / 100 == 1 || resp.statusCode == 204 || resp.statusCode == 304 || req.method == "HEAD");
-    if (!emptyBody) {
-
-        if (resp.transferEncoding == "identity") {
-
-            size_t bodySize;
-            if (auto const iter = resp.headers.find("content-length"); iter != std::end(resp.headers)) {
-                bodySize = std::stoul(iter->second);
-            } else {
-                // should an empty value land here too?
-                bodySize = 0;
-            }
-            resp.body = buffer.readAsVector(bodySize);
-
-        } else if (resp.transferEncoding == "chunked") {
-
-            std::regex const chunkHeaderPattern{R"regex(\s*([a-fA-F0-9]+)\s*(;.*)?)regex"};
-            string_view_match_result match;
-
-            while (true) {
-                auto const line = buffer.readLine();
-
-                if (!std::regex_match(std::begin(line), std::end(line),
-                                      match, chunkHeaderPattern))
-                {
-                    // TODO: make a dedicated exception, store instead of print
-                    spdlog::error("Bad chunk header: {}", line);
-                    throw std::runtime_error{"bad chunk header"};
-                }
-
-                size_t const chunkSize = std::stoul(match.str(1), nullptr, 16);
-                spdlog::debug("Chunk size: {}", chunkSize);
-
-                if (chunkSize == 0) {
-                    break;
-                }
-
-                auto const& chunk = buffer.readAsVector(chunkSize);
-
-                resp.body.insert(std::end(resp.body),
-                                 std::begin(chunk), std::end(chunk));
-
-                buffer.dropLiteral("\r\n");
-            }
-
-            // TODO: make use of trailing headers
-            while (true) {
-                auto const line = buffer.readLine();
-
-                if (line.empty()) {
-                    break;
-                }
-                spdlog::debug("Trailing header: {}", line);
-            }
-
-        } else {
-            throw std::runtime_error{"unsupported transfer encoding: " + resp.transferEncoding};
-        }
-    }
-
-    return resp;
-}
+#include "openssl.hpp"
 
 class HttpClient {
 public:
@@ -356,13 +216,9 @@ try {
     std::string url;
     app.add_option("url", url, "Target URL")->required();
 
-    HttpVersion version{HttpVersion::VERSION_1_1};
-    std::map<std::string, HttpVersion> const versionMap{
-        {"1.0", HttpVersion::VERSION_1_0},
-        {"1.1", HttpVersion::VERSION_1_1},
-    };
-    app.add_option("--http-version", version, "HTTP version")
-        ->transform(CLI::CheckedTransformer(versionMap, CLI::ignore_case));
+    HttpVersion httpVersion{HttpVersion::VERSION_1_1};
+    app.add_flag_callback("--http1.0", [&](){ httpVersion = HttpVersion::VERSION_1_0; }, "Uses HTTP 1.0");
+    app.add_flag_callback("--http1.1", [&](){ httpVersion = HttpVersion::VERSION_1_1; }, "Uses HTTP 1.1");
 
     std::string httpProxy;
     app.add_option("--http-proxy", httpProxy, "The proxy server to use for HTTP")->envname("http_proxy");
@@ -398,7 +254,7 @@ try {
         proxy.set("https", url);
     }
 
-    HttpClient client{version, proxy, noVerify};
+    HttpClient client{httpVersion, proxy, noVerify};
 
     Url requestUrl = parseUrl(url, "http");
     while (true) {
