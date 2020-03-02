@@ -1,14 +1,12 @@
 #include "openssl.hpp"
 
-#include <algorithm>
 #include <cassert>
-#include <cctype>
-#include <regex>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 
 #include <openssl/err.h>
+#include <openssl/x509v3.h>
 #include <spdlog/spdlog.h>
 
 static_assert(OPENSSL_VERSION_NUMBER >= 0x10100000L, "Use OpenSSL version 1.0.1 or later");
@@ -26,7 +24,16 @@ BioBuffer::BioBuffer(BIO *bio)
     assert(bio_ != nullptr);
 }
 
-void BioBuffer::fetch()
+auto BioBuffer::push(uint8_t const *data, size_t size) -> size_t
+{
+    int const n = BIO_write(bio_, data, size);
+    if (n < 1) {
+        throw OpenSslError{"error writing data"};
+    }
+    return n;
+}
+
+void BioBuffer::pull()
 {
     // make sure space available
     size_t const bufferSize = 256;  // this is a relative small amount, for better testing
@@ -35,7 +42,7 @@ void BioBuffer::fetch()
     int const n = BIO_read(bio_, buffer, bufferSize);
     if (n < 1) {
         if (BIO_should_retry(bio_)) {
-            this->fetch();
+            this->pull();
             return;
         }
         if (n == 0) {
@@ -46,147 +53,70 @@ void BioBuffer::fetch()
     this->markWritten(n);
 }
 
-static std::string toLower(std::string_view view)
-{
-    std::string result{view};
-    std::transform(std::begin(result), std::end(result),
-                   std::begin(result),
-                   [](char c) { return std::tolower(c); });
-    return result;
-}
-
-static void writeString(BIO *bio, std::string_view data)
-{
-    size_t sent = 0;
-    while (sent < data.size()) {
-        int const n = BIO_write(bio, data.data() + sent, data.size() - sent);
-        if (n < 1) {
-            throw OpenSslError{"error writing data"};
-        }
-        sent += n;
-    }
-}
-
 Response makeRequest(BIO *bio, Request const& req)
 {
-    auto const& message = req.makeMessage();
-    spdlog::debug("Sending request:\n{}<EOM>", message);
-
-    writeString(bio, message);
-
-    Response resp;
-
     BioBuffer buffer{bio};
 
-    // regex lack of string view support
-    using string_view_match_result = std::match_results<std::string_view::const_iterator>;
+    auto const& message = req.makeMessage();
+    spdlog::debug("Sending request:\n{}<EOM>", message);
+    buffer.write(message.data(), message.size());
 
-    // first line should be status line, since http 1.0
-    {
-        auto const line = buffer.readLine();
+    return readResponseFromBuffer(req, buffer);
+}
 
-        std::regex const pattern{R"regex(HTTP/\d+\.\d+\s+(\d\d\d)\s+.*)regex"};
-        string_view_match_result match;
-        if (!std::regex_match(std::begin(line), std::end(line),
-                              match, pattern))
-        {
-            // TODO: make a dedicated exception, store instead of print
-            spdlog::error("Bad status line: {}", line);
-            throw std::runtime_error{"bad status line"};
-        }
-        resp.statusCode = std::stoi(match.str(1));
-        spdlog::debug("Status code received: {}", resp.statusCode);
+BioPtr makeBio(std::string const& host, std::string const& port)
+{
+    BioPtr bio{BIO_new(BIO_s_connect())};
+    if (!bio) {
+        throw OpenSslError{"error BIO_new"};
     }
 
-    std::regex const headerPattern{R"regex(\s*([^:]*)\s*:\s*(.*)\s*)regex"};
-    while (true) {
-        auto const line = buffer.readLine();
+    if (BIO_set_conn_hostname(bio.get(), host.c_str()) < 1) {
+        throw OpenSslError{"error BIO_set_conn_hostname"};
+    }
+    BIO_set_conn_port(bio.get(), port.c_str());
 
-        if (line.empty()) {
-            break;
-        }
-
-        string_view_match_result match;
-        if (!std::regex_match(std::begin(line), std::end(line),
-                              match, headerPattern))
-        {
-            // TODO: make a dedicated exception, store instead of print
-            spdlog::warn("Bad header line: {}", line);
-            continue;
-        }
-
-        std::string name = toLower(match.str(1));
-
-        // FIXME: should handle duplicated headers
-        resp.headers[name] = match.str(2);
+    if (BIO_do_connect(bio.get()) < 1) {
+        throw OpenSslError{"error BIO_do_connect"};
     }
 
-    if (auto const iter = resp.headers.find("transfer-encoding"); iter != std::end(resp.headers)) {
-        // FIXME: should allow multiple transfer-encoding headers
-        resp.transferEncoding = toLower(iter->second);
-    } else {
-        resp.transferEncoding = "identity";
+    return bio;
+}
+
+SslCtxPtr makeSslCtx()
+{
+    SslCtxPtr ctx{SSL_CTX_new(TLS_client_method())};
+    if (!ctx) {
+        throw OpenSslError{"error SSL_CTX_new"};
     }
 
-    auto const emptyBody = (resp.statusCode / 100 == 1 || resp.statusCode == 204 || resp.statusCode == 304 || req.method == "HEAD");
-    if (!emptyBody) {
-
-        if (resp.transferEncoding == "identity") {
-
-            size_t bodySize;
-            if (auto const iter = resp.headers.find("content-length"); iter != std::end(resp.headers)) {
-                bodySize = std::stoul(iter->second);
-            } else {
-                // should an empty value land here too?
-                bodySize = 0;
-            }
-            resp.body = buffer.readAsVector(bodySize);
-
-        } else if (resp.transferEncoding == "chunked") {
-
-            std::regex const chunkHeaderPattern{R"regex(\s*([a-fA-F0-9]+)\s*(;.*)?)regex"};
-            string_view_match_result match;
-
-            while (true) {
-                auto const line = buffer.readLine();
-
-                if (!std::regex_match(std::begin(line), std::end(line),
-                                      match, chunkHeaderPattern))
-                {
-                    // TODO: make a dedicated exception, store instead of print
-                    spdlog::error("Bad chunk header: {}", line);
-                    throw std::runtime_error{"bad chunk header"};
-                }
-
-                size_t const chunkSize = std::stoul(match.str(1), nullptr, 16);
-                spdlog::debug("Chunk size: {}", chunkSize);
-
-                if (chunkSize == 0) {
-                    break;
-                }
-
-                auto const& chunk = buffer.readAsVector(chunkSize);
-
-                resp.body.insert(std::end(resp.body),
-                                 std::begin(chunk), std::end(chunk));
-
-                buffer.dropLiteral("\r\n");
-            }
-
-            // TODO: make use of trailing headers
-            while (true) {
-                auto const line = buffer.readLine();
-
-                if (line.empty()) {
-                    break;
-                }
-                spdlog::debug("Trailing header: {}", line);
-            }
-
-        } else {
-            throw std::runtime_error{"unsupported transfer encoding: " + resp.transferEncoding};
-        }
+    if (SSL_CTX_set_min_proto_version(ctx.get(), TLS1_2_VERSION) < 1) {
+        throw OpenSslError{"error SSL_CTX_set_min_proto_version"};
+    }
+    if (SSL_CTX_set_default_verify_paths(ctx.get()) < 1) {
+        throw OpenSslError{"error SSL_CTX_set_default_verify_paths"};
     }
 
-    return resp;
+    return ctx;
+}
+
+void verifyCertificate(SSL *ssl, std::string_view hostname)
+{
+    auto const error = SSL_get_verify_result(ssl);
+    if (error != X509_V_OK) {
+        throw std::runtime_error{X509_verify_cert_error_string(error)};
+    }
+
+    // SSL_get_verify_result returns OK when no cert is available
+    auto *cert = SSL_get_peer_certificate(ssl);
+    if (cert == nullptr) {
+        throw std::runtime_error{"no certificate available"};
+    }
+
+    // vaild certificate, but site mismatch
+    if (X509_check_host(cert, hostname.data(), hostname.size(), 0, nullptr) < 1) {
+        throw std::runtime_error{"host mismatch"};
+    }
+
+    // TODO: revoked certificate
 }

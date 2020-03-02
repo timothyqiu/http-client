@@ -33,7 +33,7 @@ Url parseUrl(std::string_view view, std::string_view defaultScheme)
 {
     Url url;
 
-    if (auto const n = view.find("://"); n != view.npos) {
+    if (auto const n = view.find("://"); n != std::string_view::npos) {
         url.scheme = std::string{view.data(), n};
         std::transform(std::begin(url.scheme), std::end(url.scheme),
                        std::begin(url.scheme),
@@ -76,12 +76,12 @@ Url parseUrl(std::string_view view, std::string_view defaultScheme)
         // TODO: should port be left empty?
     }
 
-    if (auto const n = view.find('#'); n != view.npos) {
+    if (auto const n = view.find('#'); n != std::string_view::npos) {
         url.fragment = std::string{view.data() + (n + 1), view.size() - (n + 1)};
         view = std::string_view{view.data(), n};
     }
 
-    if (auto const n = view.find('?'); n != view.npos) {
+    if (auto const n = view.find('?'); n != std::string_view::npos) {
         url.query = std::string{view.data() + (n + 1), view.size() - (n + 1)};
         view = std::string_view{view.data(), n};
     }

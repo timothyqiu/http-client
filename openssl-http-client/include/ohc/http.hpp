@@ -6,15 +6,15 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
+#include <ohc/buffer.hpp>
 #include <ohc/url.hpp>
 
 enum class HttpVersion { VERSION_1_0, VERSION_1_1 };
 
-struct Request;
-
-class Proxy {
+class ProxyRegistry {
 public:
     void set(std::string_view scheme, Url const& url);
     std::optional<Url> get(std::string_view scheme) const;
@@ -23,19 +23,26 @@ private:
     std::map<std::string, Url> servers;
 };
 
-// TODO: make this a class
-struct Request {
-    HttpVersion version;  // should this be here?
+class Request {
+public:
+    // TODO: property setter?
 
-    std::string method;
+    HttpVersion version;  // should this be here?
 
     Url url;
     Url connectAuthority;
 
     std::optional<Url> proxy;
 
-    std::string makeRequestUri() const;
-    std::string makeMessage() const;
+    auto method() const -> std::string_view;
+    void method(std::string_view value);
+
+    auto makeMessage() const -> std::string;
+
+private:
+    auto makeRequestUri() const -> std::string;
+
+    std::string method_;
 };
 
 struct Response {
@@ -48,5 +55,7 @@ struct Response {
 
     bool isSuccess() const;
 };
+
+Response readResponseFromBuffer(Request const& req, Buffer& buffer);
 
 #endif  // OHC_HTTP_HPP_
