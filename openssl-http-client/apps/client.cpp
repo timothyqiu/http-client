@@ -101,6 +101,24 @@ private:
         }
     }
 
+    SSL_CTX *getSslContext()
+    {
+        if (ssl_ctx_ == nullptr) {
+            ssl_ctx_ = SSL_CTX_new(TLS_client_method());
+            if (ssl_ctx_ == nullptr) {
+                throw OpenSslError{"error SSL_CTX_new"};
+            }
+
+            if (SSL_CTX_set_min_proto_version(ssl_ctx_, TLS1_2_VERSION) < 1) {
+                throw OpenSslError{"error SSL_CTX_set_min_proto_version"};
+            }
+            if (SSL_CTX_set_default_verify_paths(ssl_ctx_) < 1) {
+                throw OpenSslError{"error SSL_CTX_set_default_verify_paths"};
+            }
+        }
+        return ssl_ctx_;
+    }
+
     void connectBio(Request const& req)
     {
         Url const targetUrl = req.proxy ? *req.proxy : req.url;
@@ -116,60 +134,52 @@ private:
             throw OpenSslError{"error BIO_do_connect"};
         }
 
+        if (req.proxy && req.proxy->scheme == "https") {
+            this->makeHttpsPrologue(req.proxy->host);
+        }
+
         if (req.url.scheme == "https") {
-            this->connectHttps(req);
+            if (req.proxy) {
+                // HTTPS proxy CONNECT only available in 1.1
+                Request proxyReq;
+                proxyReq.version = HttpVersion::VERSION_1_1;
+                proxyReq.method = "CONNECT";
+                proxyReq.url = *req.proxy;
+                proxyReq.connectAuthority = req.url;
+
+                auto const& resp = makeRequest(bio_, proxyReq);
+
+                if (!resp.isSuccess()) {
+                    // TODO: make a dedicated exception?
+                    spdlog::error("Proxy server returned {} for CONNECT", resp.statusCode);
+                    throw std::runtime_error{"proxy server refused"};
+                }
+            }
+            this->makeHttpsPrologue(req.url.host);
         }
     }
 
-    void connectHttps(Request const& req)
+    void makeHttpsPrologue(std::string const& hostname)
     {
-        if (req.proxy) {
-            // HTTPS proxy CONNECT only available in 1.1
-            Request proxyReq;
-            proxyReq.version = HttpVersion::VERSION_1_1;
-            proxyReq.method = "CONNECT";
-            proxyReq.url = *req.proxy;
-            proxyReq.connectAuthority = req.url;
-
-            auto const& resp = makeRequest(bio_, proxyReq);
-
-            if (!resp.isSuccess()) {
-                // TODO: make a dedicated exception?
-                spdlog::error("Proxy server returned {} for CONNECT", resp.statusCode);
-                throw std::runtime_error{"proxy server refused"};
-            }
-        }
-
-        ssl_ctx_ = SSL_CTX_new(TLS_client_method());
-        if (ssl_ctx_ == nullptr) {
-            throw OpenSslError{"error SSL_CTX_new"};
-        }
-
-        if (SSL_CTX_set_min_proto_version(ssl_ctx_, TLS1_2_VERSION) < 1) {
-            throw OpenSslError{"error SSL_CTX_set_min_proto_version"};
-        }
-        if (SSL_CTX_set_default_verify_paths(ssl_ctx_) < 1) {
-            throw OpenSslError{"error SSL_CTX_set_default_verify_paths"};
-        }
-
-        BIO *ssl_bio = BIO_new_ssl(ssl_ctx_, /*client*/1);
+        BIO *ssl_bio = BIO_new_ssl(this->getSslContext(), /*client*/1);
         if (ssl_bio == nullptr) {
             throw OpenSslError{"error BIO_new_ssl"};
+        }
+
+        SSL *ssl = nullptr;
+        if (BIO_get_ssl(ssl_bio, &ssl) < 1) {
+            throw OpenSslError{"error BIO_get_ssl"};
+        }
+        assert(ssl != nullptr);
+
+        // SNI
+        if (SSL_set_tlsext_host_name(ssl, hostname.c_str()) < 1) {
+            throw OpenSslError{"error SSL_set_tlsext_host_name"};
         }
 
         // FIXME: this works, but ugly and error-prone
         // (bio) is now (ssl_bio -> bio)
         bio_ = BIO_push(ssl_bio, bio_);
-
-        SSL *ssl;
-        if (BIO_get_ssl(ssl_bio, &ssl) < 1) {
-            throw OpenSslError{"error BIO_get_ssl"};
-        }
-
-        // SNI
-        if (SSL_set_tlsext_host_name(ssl, req.url.host.c_str()) < 1) {
-            throw OpenSslError{"error SSL_set_tlsext_host_name"};
-        }
 
         // this step will be done at I/O if omitted
         if (BIO_do_handshake(bio_) < 1) {
@@ -189,7 +199,7 @@ private:
             }
 
             // vaild certificate, but site mismatch
-            if (X509_check_host(cert, req.url.host.data(), req.url.host.size(), 0, nullptr) < 1) {
+            if (X509_check_host(cert, hostname.data(), hostname.size(), 0, nullptr) < 1) {
                 throw std::runtime_error{"host mismatch"};
             }
 
@@ -241,15 +251,15 @@ try {
     Proxy proxy;
     if (!httpProxy.empty()) {
         auto const& url = parseUrl(httpProxy, "http");
-        if (url.scheme != "http") {
-            throw std::runtime_error{"proxy server using non-http scheme not supported"};
+        if (url.scheme != "http" && url.scheme != "https") {
+            throw std::runtime_error{"proxy server scheme not supported"};
         }
         proxy.set("http", url);
     }
     if (!httpsProxy.empty()) {
         auto const& url = parseUrl(httpsProxy, "http");
-        if (url.scheme != "http") {
-            throw std::runtime_error{"proxy server using non-http scheme not supported"};
+        if (url.scheme != "http" && url.scheme != "https") {
+            throw std::runtime_error{"proxy server scheme not supported"};
         }
         proxy.set("https", url);
     }
