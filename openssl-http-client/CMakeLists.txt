@@ -13,12 +13,15 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
   endif()
 endif()
 
+set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMake;${CMAKE_MODULE_PATH}")
+
 include(FetchContent)
 if(${CMAKE_VERSION} VERSION_LESS 3.14)
     include(cmake/add_FetchContent_MakeAvailable.cmake)
 endif()
 
 find_package(OpenSSL REQUIRED)
+find_package(MbedTLS REQUIRED)
 
 FetchContent_Declare(
   cli11
