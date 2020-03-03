@@ -9,7 +9,7 @@
 #include <ohc/http.hpp>
 #include <ohc/url.hpp>
 
-#include "http.hpp"
+#include "openssl/session.hpp"
 
 int main(int argc, char *argv[])
 try {
@@ -50,12 +50,13 @@ try {
         proxy.set("https", parseUrl(httpsProxy, "http"));
     }
 
-    HttpClient client{httpVersion, proxy, insecure, proxyInsecure};
+    OpenSslSession session{httpVersion, proxy, insecure, proxyInsecure};
 
     Url requestUrl = parseUrl(url, "http");
     while (true) {
-        auto const resp = client.get(requestUrl);
+        auto const resp = session.get(requestUrl);
 
+        // TODO: move these to session
         if (isFollow && (resp.statusCode == 301 || resp.statusCode == 302 || resp.statusCode == 303)) {
             // TODO: don't redirect if non-GET
             auto const location = resp.headers.at("location");

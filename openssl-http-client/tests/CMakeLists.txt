@@ -6,7 +6,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(catch2)
 list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/contrib)
 
-add_executable(test-library test_library.cpp)
+add_executable(test-library main.cpp http.cpp url.cpp)
 target_link_libraries(test-library PRIVATE ohc::ohc Catch2::Catch2)
 
 include(Catch)

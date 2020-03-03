@@ -29,8 +29,8 @@ public:
 
     HttpVersion version;  // should this be here?
 
-    Url url;
-    Url connectAuthority;
+    Url url;  // target of most methods
+    Url connectAuthority;  // target of CONNECT method
 
     std::optional<Url> proxy;
 

@@ -25,7 +25,7 @@ uint8_t *Buffer::getBuffer(size_t size)
 
 void Buffer::markWritten(size_t size)
 {
-    assert(write_ + size < buffer_.size());
+    assert(write_ + size <= buffer_.size());
     write_ += size;
 }
 

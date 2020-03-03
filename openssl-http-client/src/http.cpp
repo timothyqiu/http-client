@@ -95,7 +95,7 @@ std::string Request::makeMessage() const
 
 bool Response::isSuccess() const
 {
-    auto const category = statusCode % 100;
+    auto const category = statusCode / 100;
     return category < 4;
 }
 
