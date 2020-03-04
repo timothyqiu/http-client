@@ -1,4 +1,8 @@
-# HTTP Client via OpenSSL
+# Demo HTTP Client
+
+Attempt to implement an HTTP client in two ways: one via OpenSSL, one via MbedTLS.
+
+OpenSSL and MbedTLS should be installed separately on the build machine. Other dependencies of the project will be downloaded by CMake.
 
 Sample command to build with OpenSSL installed via Homebrew:
 
