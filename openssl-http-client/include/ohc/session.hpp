@@ -31,7 +31,7 @@ private:
     auto makeRequest(Request const& req) -> Response;
 
     virtual bool isConnected() const = 0;
-    virtual void createConnection(Request const& req) = 0;
+    virtual void createConnection(std::string const& host, std::string const& port) = 0;
     virtual void closeConnection() = 0;
 
     virtual void performHttpsPrologue(std::string const& hostname, bool verify) = 0;

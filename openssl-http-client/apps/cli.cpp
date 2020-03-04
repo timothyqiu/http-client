@@ -9,7 +9,13 @@
 #include <ohc/http.hpp>
 #include <ohc/url.hpp>
 
+#ifdef USE_MBEDTLS
+#include "mbedtls/session.hpp"
+#endif
+
+#ifdef USE_OPENSSL
 #include "openssl/session.hpp"
+#endif
 
 int main(int argc, char *argv[])
 try {
@@ -50,7 +56,13 @@ try {
         proxy.set("https", parseUrl(httpsProxy, "http"));
     }
 
+#ifdef USE_MBEDTLS
+    MbedTlsSession session{httpVersion, proxy, insecure, proxyInsecure};
+#endif
+
+#ifdef USE_OPENSSL
     OpenSslSession session{httpVersion, proxy, insecure, proxyInsecure};
+#endif
 
     Url requestUrl = parseUrl(url, "http");
     while (true) {

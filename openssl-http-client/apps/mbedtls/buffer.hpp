@@ -5,21 +5,28 @@
 #include <mbedtls/net_sockets.h>
 #include <mbedtls/ssl.h>
 
-class CtxBuffer : public Buffer {
+class NetCtxBuffer : public Buffer {
 public:
     // not owning
-    explicit CtxBuffer(mbedtls_net_context *ctx);
-    explicit CtxBuffer(mbedtls_ssl_context *ctx);
+    explicit NetCtxBuffer(mbedtls_net_context *ctx);
 
     auto push(uint8_t const *data, size_t size) -> size_t override;
     void pull() override;
 
 private:
-    mbedtls_net_context *netCtx_;
-    mbedtls_ssl_context *sslCtx_;
+    mbedtls_net_context *ctx_;
+};
 
-    auto dispatchRead(uint8_t *buffer, size_t size) -> int;
-    auto dispatchWrite(uint8_t const *data, size_t size) -> int;
+class SslCtxBuffer : public Buffer {
+public:
+    // not owning
+    explicit SslCtxBuffer(mbedtls_ssl_context *ctx);
+
+    auto push(uint8_t const *data, size_t size) -> size_t override;
+    void pull() override;
+
+private:
+    mbedtls_ssl_context *ctx_;
 };
 
 #endif  // APPS_MBEDTLS_BUFER_HPP_

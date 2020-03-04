@@ -25,7 +25,10 @@ Response Session::request(Request const& req)
 {
     if (!this->canReuseCurrentConnection(req)) {
         this->closeConnection();
-        this->createConnection(req);
+
+        Url const authority = req.proxy ? *req.proxy : req.url;
+        spdlog::info("Connecting to {}:{}", authority.host, authority.port);
+        this->createConnection(authority.host, authority.port);
         this->setupHttps(req);
 
         serverIdentity_ = req.url;

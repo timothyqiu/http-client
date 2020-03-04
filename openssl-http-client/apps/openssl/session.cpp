@@ -85,20 +85,17 @@ bool OpenSslSession::isConnected() const
     return bool{bio_};
 }
 
-void OpenSslSession::createConnection(Request const& req)
+void OpenSslSession::createConnection(std::string const& host, std::string const& port)
 {
-    Url const authority = req.proxy ? *req.proxy : req.url;
-    spdlog::info("Connecting to {}:{}", authority.host, authority.port);
-
     bio_ = BioPtr{BIO_new(BIO_s_connect())};
     if (!bio_) {
         throw OpenSslError{"error BIO_new"};
     }
 
-    if (BIO_set_conn_hostname(bio_.get(), authority.host.c_str()) < 1) {
+    if (BIO_set_conn_hostname(bio_.get(), host.c_str()) < 1) {
         throw OpenSslError{"error BIO_set_conn_hostname"};
     }
-    BIO_set_conn_port(bio_.get(), authority.port.c_str());
+    BIO_set_conn_port(bio_.get(), port.c_str());
 
     if (BIO_do_connect(bio_.get()) < 1) {
         throw OpenSslError{"error BIO_do_connect"};
