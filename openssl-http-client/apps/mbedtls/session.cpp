@@ -4,9 +4,15 @@
 #include "buffer.hpp"
 #include "exceptions.hpp"
 
-MbedTlsSession::MbedTlsSession(HttpVersion version, ProxyRegistry const& proxyRegistry,
-                               bool insecure, bool proxyInsecure)
-    : Session{version, proxyRegistry, insecure, proxyInsecure}
+bool MbedTlsSession::s_registered = SessionFactory::registerCreator("mbedtls", MbedTlsSession::create);
+
+std::unique_ptr<Session> MbedTlsSession::create(HttpVersion version, ProxyRegistry const& proxyRegistry)
+{
+    return std::make_unique<MbedTlsSession>(version, proxyRegistry);
+}
+
+MbedTlsSession::MbedTlsSession(HttpVersion version, ProxyRegistry const& proxyRegistry)
+    : Session{version, proxyRegistry}
 {
 }
 

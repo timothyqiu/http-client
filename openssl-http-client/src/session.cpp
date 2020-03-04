@@ -1,10 +1,9 @@
 #include <ohc/session.hpp>
 #include <spdlog/spdlog.h>
 
-Session::Session(HttpVersion version, ProxyRegistry const& proxyRegistry,
-                 bool insecure, bool proxyInsecure)
+Session::Session(HttpVersion version, ProxyRegistry const& proxyRegistry)
     : version_{version}, proxyRegistry_{proxyRegistry}
-    , insecure_{insecure}, proxyInsecure_{proxyInsecure}
+    , insecure_{false}, proxyInsecure_{false}
 {
 }
 
@@ -130,4 +129,32 @@ auto Session::makeRequest(Request const& req) -> Response
     auto const buffer = this->createBuffer();
     buffer->write(message.data(), message.size());
     return readResponseFromBuffer(req, *buffer);
+}
+
+SessionFactory& SessionFactory::instance()
+{
+    static SessionFactory instance;
+    return instance;
+}
+
+bool SessionFactory::registerCreator(std::string const& name, CreatorFunc func)
+{
+    auto& registry = SessionFactory::instance().registry_;
+
+    if (auto const iter = registry.find(name); iter != std::end(registry)) {
+        return false;
+    }
+    registry[name] = func;
+    return true;
+}
+
+std::unique_ptr<Session> SessionFactory::create(std::string const& name,
+                                                HttpVersion version, ProxyRegistry const& proxyRegistry)
+{
+    auto& registry = SessionFactory::instance().registry_;
+
+    if (auto const iter = registry.find(name); iter != std::end(registry)) {
+        return iter->second(version, proxyRegistry);
+    }
+    return nullptr;
 }

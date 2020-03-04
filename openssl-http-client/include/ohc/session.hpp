@@ -1,24 +1,29 @@
 #ifndef OHC_SESSION_HPP_
 #define OHC_SESSION_HPP_
 
+#include <map>
 #include <memory>
+#include <string>
 #include <ohc/buffer.hpp>
 #include <ohc/http.hpp>
 
 class Session {
 public:
-    Session(HttpVersion version, ProxyRegistry const& proxyRegistry,
-            bool insecure, bool proxyInsecure);
+    Session(HttpVersion version, ProxyRegistry const& proxyRegistry);
     virtual ~Session();
 
     auto version() const { return version_; }
+
     bool insecure() const { return insecure_; }
+    void insecure(bool value) { insecure_ = value; }
     bool proxyInsecure() const { return proxyInsecure_; }
+    void proxyInsecure(bool value) { proxyInsecure_ = value; }
 
     auto get(Url const& url) -> Response;
     auto request(Request const& req) -> Response;
 
 private:
+
     HttpVersion version_;
     ProxyRegistry proxyRegistry_;
     bool insecure_;
@@ -36,6 +41,22 @@ private:
 
     virtual void performHttpsPrologue(std::string const& hostname, bool verify) = 0;
     virtual auto createBuffer() -> std::unique_ptr<Buffer> = 0;
+};
+
+class SessionFactory {
+public:
+    using CreatorFunc = std::unique_ptr<Session>(*)(HttpVersion, ProxyRegistry const&);
+
+    static bool registerCreator(std::string const& name, CreatorFunc func);
+    static std::unique_ptr<Session> create(std::string const& name,
+                                           HttpVersion version, ProxyRegistry const& proxyRegistry);
+
+private:
+    std::map<std::string, CreatorFunc> registry_;
+
+    static SessionFactory& instance();
+
+    SessionFactory() = default;
 };
 
 #endif  // OHC_SESSION_HPP_

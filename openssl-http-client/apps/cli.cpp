@@ -7,15 +7,8 @@
 #include <spdlog/spdlog.h>
 
 #include <ohc/http.hpp>
+#include <ohc/session.hpp>
 #include <ohc/url.hpp>
-
-#ifdef USE_MBEDTLS
-#include "mbedtls/session.hpp"
-#endif
-
-#ifdef USE_OPENSSL
-#include "openssl/session.hpp"
-#endif
 
 int main(int argc, char *argv[])
 try {
@@ -23,6 +16,9 @@ try {
 
     std::string url;
     app.add_option("url", url, "Target URL")->required();
+
+    std::string driver{"openssl"};
+    app.add_set("--driver", driver, {"openssl", "mbedtls"});
 
     HttpVersion httpVersion{HttpVersion::VERSION_1_1};
     app.add_flag_callback("--http1.0", [&](){ httpVersion = HttpVersion::VERSION_1_0; }, "Uses HTTP 1.0");
@@ -56,17 +52,17 @@ try {
         proxy.set("https", parseUrl(httpsProxy, "http"));
     }
 
-#ifdef USE_MBEDTLS
-    MbedTlsSession session{httpVersion, proxy, insecure, proxyInsecure};
-#endif
+    auto session = SessionFactory::create(driver, httpVersion, proxy);
+    if (!session) {
+        throw std::runtime_error{"no such driver: " + driver};
+    }
 
-#ifdef USE_OPENSSL
-    OpenSslSession session{httpVersion, proxy, insecure, proxyInsecure};
-#endif
+    session->insecure(insecure);
+    session->proxyInsecure(proxyInsecure);
 
     Url requestUrl = parseUrl(url, "http");
     while (true) {
-        auto const resp = session.get(requestUrl);
+        auto const resp = session->get(requestUrl);
 
         // TODO: move these to session
         if (isFollow && (resp.statusCode == 301 || resp.statusCode == 302 || resp.statusCode == 303)) {

@@ -9,9 +9,15 @@
 
 static_assert(OPENSSL_VERSION_NUMBER >= 0x10100000L, "Use OpenSSL version 1.0.1 or later");
 
-OpenSslSession::OpenSslSession(HttpVersion version, ProxyRegistry const& proxyRegistry,
-                               bool insecure, bool proxyInsecure)
-    : Session{version, proxyRegistry, insecure, proxyInsecure}
+bool OpenSslSession::s_registered = SessionFactory::registerCreator("openssl", OpenSslSession::create);
+
+std::unique_ptr<Session> OpenSslSession::create(HttpVersion version, ProxyRegistry const& proxyRegistry)
+{
+    return std::make_unique<OpenSslSession>(version, proxyRegistry);
+}
+
+OpenSslSession::OpenSslSession(HttpVersion version, ProxyRegistry const& proxyRegistry)
+    : Session{version, proxyRegistry}
 {
 }
 

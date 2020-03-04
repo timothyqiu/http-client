@@ -7,10 +7,13 @@
 
 class MbedTlsSession : public Session {
 public:
-    MbedTlsSession(HttpVersion version, ProxyRegistry const& proxyRegistry,
-                   bool insecure, bool proxyInsecure);
+    MbedTlsSession(HttpVersion version, ProxyRegistry const& proxyRegistry);
 
 private:
+    static bool s_registered;
+
+    static std::unique_ptr<Session> create(HttpVersion version, ProxyRegistry const& proxyRegistry);
+
     std::unique_ptr<SslConfig> config_;
 
     std::unique_ptr<SslContext> ssl_;
