@@ -19,6 +19,8 @@ I used to install dependencies with CMake's [FetchContent](https://cmake.org/cma
 
 __Note:__ [CLI11](https://github.com/CLIUtils/CLI11) and [spdlog](https://github.com/gabime/spdlog) uses C++17's `std::filesystem`. It's known that GCC <= 8 requires to link a separate `libstdc++fs` library for that. This may results in "undefined reference" link errors, and I think CMake should have a proper solution like [this](https://gitlab.kitware.com/cmake/cmake/issues/17834).
 
+When using Visual Studio on Windows, note that Conan installs Release build by default (`-s build_type=Debug` to change), and CMake builds Debug by default (`--config Release`). Type mismatch will result in link errors.
+
 ## Run
 
 The `client` binary uses similar options to `curl`.
@@ -26,6 +28,8 @@ The `client` binary uses similar options to `curl`.
     https_proxy=localhost:8080 /path/to/client -L https://httpbin.org/redirect/2
 
 OpenSSL and MbedTLS can be selected with the `--driver` option. Use `-h` to see the complete option list.
+
+__Note:__ Currently, the default root CA cert paths are hardcoded for POSIX systems. So you have to use `--cacert` and/or `--capath` options to manually select the certs on Windows.
 
 To run tests:
 
@@ -54,7 +58,7 @@ To skip a specific tag, use the filter `~[tag]`. Currently, there are tests tagg
 
 ### Proxy
 
-Envionment variables `http_proxy`, `https_proxy` are usually used to specifiy proxies.
+Envionment variables `http_proxy`, `https_proxy` are usually used to specify proxies.
 
 The content of the environment variables is the URL `[protocol://]host[:port]`, some applications require the `protocol://` part, some defaults it to `http://`. The protocol part determines how to connect to the proxy server.
 

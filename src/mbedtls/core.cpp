@@ -14,6 +14,7 @@ static void loadDefaultCerts(mbedtls_x509_crt *x509)
     if (certErr != 0 && pathErr != 0) {
         spdlog::error("Can't load default certs from {}: {}", cert, mbedTlsTranslateError(certErr));
         spdlog::error("Can't load default certs from {}: {}", path, mbedTlsTranslateError(pathErr));
+        throw std::runtime_error{"can't load default certs"};
     }
 }
 

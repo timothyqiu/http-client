@@ -1,4 +1,5 @@
 #include <ohc/buffer.hpp>
+#include <algorithm>
 #include <cassert>
 #include <stdexcept>
 
