@@ -10,7 +10,6 @@ public:
     using SessionPtr = std::unique_ptr<Session>;
     using CreatorFunc = SessionPtr(*)(HttpVersion, ProxyRegistry const&);
 
-    static bool registerCreator(std::string const& name, CreatorFunc func);
     static auto create(std::string const& name,
                        HttpVersion version, ProxyRegistry const& proxyRegistry) -> SessionPtr;
 

@@ -1,11 +1,8 @@
 #include "session.hpp"
 #include <cassert>
-#include <ohc/session_factory.hpp>
 #include <spdlog/spdlog.h>
 #include "buffer.hpp"
 #include "exceptions.hpp"
-
-bool MbedTlsSession::s_registered = SessionFactory::registerCreator("mbedtls", MbedTlsSession::create);
 
 std::unique_ptr<Session> MbedTlsSession::create(HttpVersion version, ProxyRegistry const& proxyRegistry)
 {
@@ -108,7 +105,6 @@ auto MbedTlsSession::getSslConfig() -> mbedtls_ssl_config const *
 {
     if (!config_) {
         // TODO: don't use hardcoded path
-        // TODO: singleton?
         config_ = std::make_unique<SslConfig>("/etc/ssl/cert.pem");
     }
     return config_->get();

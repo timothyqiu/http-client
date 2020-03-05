@@ -1,7 +1,6 @@
 #include "session.hpp"
 
 #include <ohc/http.hpp>
-#include <ohc/session_factory.hpp>
 #include <openssl/x509v3.h>
 #include <spdlog/spdlog.h>
 
@@ -9,8 +8,6 @@
 #include "exceptions.hpp"
 
 static_assert(OPENSSL_VERSION_NUMBER >= 0x10100000L, "Use OpenSSL version 1.0.1 or later");
-
-bool OpenSslSession::s_registered = SessionFactory::registerCreator("openssl", OpenSslSession::create);
 
 std::unique_ptr<Session> OpenSslSession::create(HttpVersion version, ProxyRegistry const& proxyRegistry)
 {
@@ -33,7 +30,10 @@ auto OpenSslSession::getSslContext() -> SSL_CTX *
         if (SSL_CTX_set_min_proto_version(sslCtx_.get(), TLS1_2_VERSION) < 1) {
             throw OpenSslError{"error SSL_CTX_set_min_proto_version"};
         }
-        if (SSL_CTX_set_default_verify_paths(sslCtx_.get()) < 1) {
+
+        // TODO: don't use hardcoded path
+        char const *rootCertPath = "/etc/ssl/cert.pem";
+        if (SSL_CTX_load_verify_locations(sslCtx_.get(), rootCertPath, nullptr) < 1) {
             throw OpenSslError{"error SSL_CTX_set_default_verify_paths"};
         }
     }

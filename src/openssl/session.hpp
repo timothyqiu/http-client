@@ -7,13 +7,11 @@
 
 class OpenSslSession : public Session {
 public:
+    static std::unique_ptr<Session> create(HttpVersion version, ProxyRegistry const& proxyRegistry);
+
     OpenSslSession(HttpVersion version, ProxyRegistry const& proxyRegistry);
 
 private:
-    static bool s_registered;
-
-    static std::unique_ptr<Session> create(HttpVersion version, ProxyRegistry const& proxyRegistry);
-
     BioPtr bio_;
     SslCtxPtr sslCtx_;
 

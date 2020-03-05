@@ -4,17 +4,16 @@ Attempt to implement an HTTP client in two ways: one via OpenSSL, one via MbedTL
 
 ## Build
 
-  # Install dependencies via [Conan](https://conan.io/)
-  $ conan install -if /path/to/build-dir .
+Build the project with [CMake](https://cmake.org/) and [Conan](https://conan.io/).
 
-  # Configure the project via [CMake](https://cmake.org/)
-  $ cmake -B /path/to/build-dir -S .
+    # Install dependencies via Conan
+    $ conan install -if /path/to/build-dir .
 
-  # Build the project
-  $ cmake --build /path/to/build-dir
+    # Configure the project via CMake
+    $ cmake -B /path/to/build-dir -S .
 
-  # Run tests (should have been built first)
-  $ cmake --build /path/to/build-dir --target test
+    # Build the project
+    $ cmake --build /path/to/build-dir
 
 I used to install dependencies with CMake's [FetchContent](https://cmake.org/cmake/help/latest/module/FetchContent.html) module. It works fine, but it's a pain to use in mainland China, as HTTPS connections to GitHub are often throttled. I have to wait for several minutes to make a fresh build. Libraries that's not modern-cmake compatible can't be installed like this anyway. So a package manager seems necessary.
 
@@ -25,6 +24,12 @@ The `client` binary uses similar options to `curl`.
     https_proxy=localhost:8080 /path/to/client -L https://httpbin.org/redirect/2
 
 OpenSSL and MbedTLS can be selected with the `--driver` option. Use `-h` to see the complete option list.
+
+To run tests:
+
+    cmake --build /path/to/build-dir --target test
+
+Currently, there are tests tagged `[network-required]` and `[proxy-required]` which needs special environment setup.
 
 ## Notes
 
