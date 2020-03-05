@@ -1,6 +1,7 @@
 #include "session.hpp"
 
 #include <ohc/http.hpp>
+#include <ohc/session_factory.hpp>
 #include <openssl/x509v3.h>
 #include <spdlog/spdlog.h>
 

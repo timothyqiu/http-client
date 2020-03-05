@@ -1,7 +1,6 @@
 #ifndef OHC_SESSION_HPP_
 #define OHC_SESSION_HPP_
 
-#include <map>
 #include <memory>
 #include <string>
 #include <ohc/buffer.hpp>
@@ -41,22 +40,6 @@ private:
 
     virtual void performHttpsPrologue(std::string const& hostname, bool verify) = 0;
     virtual auto createBuffer() -> std::unique_ptr<Buffer> = 0;
-};
-
-class SessionFactory {
-public:
-    using CreatorFunc = std::unique_ptr<Session>(*)(HttpVersion, ProxyRegistry const&);
-
-    static bool registerCreator(std::string const& name, CreatorFunc func);
-    static std::unique_ptr<Session> create(std::string const& name,
-                                           HttpVersion version, ProxyRegistry const& proxyRegistry);
-
-private:
-    std::map<std::string, CreatorFunc> registry_;
-
-    static SessionFactory& instance();
-
-    SessionFactory() = default;
 };
 
 #endif  // OHC_SESSION_HPP_

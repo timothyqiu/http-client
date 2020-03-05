@@ -1,5 +1,6 @@
 #include "session.hpp"
 #include <cassert>
+#include <ohc/session_factory.hpp>
 #include <spdlog/spdlog.h>
 #include "buffer.hpp"
 #include "exceptions.hpp"

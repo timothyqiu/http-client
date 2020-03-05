@@ -7,7 +7,7 @@
 #include <spdlog/spdlog.h>
 
 #include <ohc/http.hpp>
-#include <ohc/session.hpp>
+#include <ohc/session_factory.hpp>
 #include <ohc/url.hpp>
 
 int main(int argc, char *argv[])
