@@ -18,6 +18,11 @@ public:
     bool proxyInsecure() const { return proxyInsecure_; }
     void proxyInsecure(bool value) { proxyInsecure_ = value; }
 
+    auto caCert() const { return caCert_; }
+    void caCert(std::string value);
+    auto caPath() const { return caPath_; }
+    void caPath(std::string value);
+
     auto get(Url const& url) -> Response;
     auto request(Request const& req) -> Response;
 
@@ -27,6 +32,8 @@ private:
     ProxyRegistry proxyRegistry_;
     bool insecure_;
     bool proxyInsecure_;
+    std::string caCert_;
+    std::string caPath_;
 
     Url serverIdentity_;
 
@@ -38,6 +45,7 @@ private:
     virtual void createConnection(std::string const& host, std::string const& port) = 0;
     virtual void closeConnection() = 0;
 
+    virtual void resetSslConfig() = 0;
     virtual void performHttpsPrologue(std::string const& hostname, bool verify) = 0;
     virtual auto createBuffer() -> std::unique_ptr<Buffer> = 0;
 };

@@ -11,12 +11,28 @@ static_assert(OPENSSL_VERSION_NUMBER >= 0x10100000L, "Use OpenSSL version 1.0.1 
 
 std::unique_ptr<Session> OpenSslSession::create(HttpVersion version, ProxyRegistry const& proxyRegistry)
 {
+    spdlog::debug("Creating session with {}", OPENSSL_VERSION_TEXT);
     return std::make_unique<OpenSslSession>(version, proxyRegistry);
 }
 
 OpenSslSession::OpenSslSession(HttpVersion version, ProxyRegistry const& proxyRegistry)
     : Session{version, proxyRegistry}
 {
+}
+
+static void loadDefaultCerts(SSL_CTX *ctx)
+{
+    // TODO: windows location?
+    char const *cert = "/etc/ssl/cert.pem";
+    char const *path = "/etc/ssl/certs";
+
+    auto const certFailed = SSL_CTX_load_verify_locations(ctx, cert, nullptr) < 1;
+    auto const pathFailed = SSL_CTX_load_verify_locations(ctx, nullptr, path) < 1;
+
+    if (certFailed && pathFailed) {
+        throw OpenSslError{"loadDefaultCerts"};
+    }
+    // TODO: cleanup openssl error code?
 }
 
 auto OpenSslSession::getSslContext() -> SSL_CTX *
@@ -31,13 +47,24 @@ auto OpenSslSession::getSslContext() -> SSL_CTX *
             throw OpenSslError{"error SSL_CTX_set_min_proto_version"};
         }
 
-        // TODO: don't use hardcoded path
-        char const *rootCertPath = "/etc/ssl/cert.pem";
-        if (SSL_CTX_load_verify_locations(sslCtx_.get(), rootCertPath, nullptr) < 1) {
-            throw OpenSslError{"error SSL_CTX_set_default_verify_paths"};
+        if (caCert().empty() && caPath().empty()) {
+            loadDefaultCerts(sslCtx_.get());
+        } else {
+            if (SSL_CTX_load_verify_locations(sslCtx_.get(),
+                                              caCert().empty() ? nullptr : caCert().c_str(),
+                                              caPath().empty() ? nullptr : caPath().c_str()) < 1)
+            {
+                throw OpenSslError{"error SSL_CTX_load_verify_locations"};
+            }
         }
     }
     return sslCtx_.get();
+}
+
+void OpenSslSession::resetSslConfig()
+{
+    this->closeConnection();
+    sslCtx_.reset();
 }
 
 void OpenSslSession::performHttpsPrologue(std::string const& hostname, bool verify)

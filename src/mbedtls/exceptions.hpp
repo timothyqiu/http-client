@@ -3,6 +3,9 @@
 
 #include <stdexcept>
 
+// static buffer
+char const *mbedTlsTranslateError(int error);
+
 class MbedTlsError : public std::runtime_error {
 public:
     MbedTlsError(char const *message, int error);

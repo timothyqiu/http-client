@@ -9,7 +9,19 @@ Session::Session(HttpVersion version, ProxyRegistry const& proxyRegistry)
 
 Session::~Session() = default;
 
-Response Session::get(Url const& url)
+void Session::caCert(std::string value)
+{
+    caCert_ = std::move(value);
+    this->resetSslConfig();
+}
+
+void Session::caPath(std::string value)
+{
+    caPath_ = std::move(value);
+    this->resetSslConfig();
+}
+
+auto Session::get(Url const& url) -> Response
 {
     Request req;
     req.version = version_;
@@ -20,7 +32,7 @@ Response Session::get(Url const& url)
     return this->request(req);
 }
 
-Response Session::request(Request const& req)
+auto Session::request(Request const& req) -> Response
 {
     if (!this->canReuseCurrentConnection(req)) {
         this->closeConnection();

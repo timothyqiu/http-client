@@ -29,6 +29,11 @@ try {
     std::string httpsProxy;
     app.add_option("--https-proxy", httpsProxy, "The proxy server to use for HTTPS")->envname("https_proxy");
 
+    std::string caCert;
+    std::string caPath;
+    app.add_option("--cacert", caCert, "CA certificate to verify peer against")->check(CLI::ExistingFile);
+    app.add_option("--capath", caPath, "CA directory to verify peer against")->check(CLI::ExistingDirectory);
+
     bool insecure{false};
     bool proxyInsecure{false};
     app.add_flag("-k,--insecure", insecure, "Allow insecure server connections when using SSL");
@@ -59,6 +64,13 @@ try {
 
     session->insecure(insecure);
     session->proxyInsecure(proxyInsecure);
+
+    if (!caCert.empty()) {
+        session->caCert(caCert);
+    }
+    if (!caPath.empty()) {
+        session->caPath(caPath);
+    }
 
     Url requestUrl = parseUrl(url, "http");
     while (true) {

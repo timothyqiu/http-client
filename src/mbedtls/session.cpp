@@ -1,11 +1,13 @@
 #include "session.hpp"
 #include <cassert>
+#include <mbedtls/version.h>
 #include <spdlog/spdlog.h>
 #include "buffer.hpp"
 #include "exceptions.hpp"
 
 std::unique_ptr<Session> MbedTlsSession::create(HttpVersion version, ProxyRegistry const& proxyRegistry)
 {
+    spdlog::debug("Creating session with {}", MBEDTLS_VERSION_STRING_FULL);
     return std::make_unique<MbedTlsSession>(version, proxyRegistry);
 }
 
@@ -35,6 +37,12 @@ void MbedTlsSession::closeConnection()
     ssl_.reset();
     proxySsl_.reset();
     net_.reset();
+}
+
+void MbedTlsSession::resetSslConfig()
+{
+    this->closeConnection();
+    config_.reset();
 }
 
 void MbedTlsSession::performHttpsPrologue(std::string const& hostname, bool verify)
@@ -105,7 +113,7 @@ auto MbedTlsSession::getSslConfig() -> mbedtls_ssl_config const *
 {
     if (!config_) {
         // TODO: don't use hardcoded path
-        config_ = std::make_unique<SslConfig>("/etc/ssl/cert.pem");
+        config_ = std::make_unique<SslConfig>(this->caCert(), this->caPath());
     }
     return config_->get();
 }

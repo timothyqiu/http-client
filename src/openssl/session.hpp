@@ -21,6 +21,7 @@ private:
     void createConnection(std::string const& host, std::string const& port) override;
     void closeConnection() override;
 
+    void resetSslConfig() override;
     void performHttpsPrologue(std::string const& hostname, bool verify) override;
     auto createBuffer() -> std::unique_ptr<Buffer> override;
 };

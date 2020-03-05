@@ -1,6 +1,8 @@
 #ifndef APPS_MBEDTLS_CORE_HPP_
 #define APPS_MBEDTLS_CORE_HPP_
 
+#include <string>
+
 #include <mbedtls/ctr_drbg.h>
 #include <mbedtls/entropy.h>
 #include <mbedtls/net_sockets.h>
@@ -32,7 +34,7 @@ using X509Cert = MbedTlsObject<mbedtls_x509_crt, mbedtls_x509_crt_init, mbedtls_
 
 class SslConfig {
 public:
-    explicit SslConfig(char const *rootCertPath);
+    explicit SslConfig(std::string const& cert, std::string const& path);
     ~SslConfig();
 
     mbedtls_ssl_config const *get() const { return &config_; }
