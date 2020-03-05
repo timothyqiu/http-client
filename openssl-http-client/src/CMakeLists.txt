@@ -1,9 +1,9 @@
 set(HEADER_LIST
-  "${OpenSslHttpClient_SOURCE_DIR}/include/ohc/buffer.hpp"
-  "${OpenSslHttpClient_SOURCE_DIR}/include/ohc/http.hpp"
-  "${OpenSslHttpClient_SOURCE_DIR}/include/ohc/session.hpp"
-  "${OpenSslHttpClient_SOURCE_DIR}/include/ohc/session_factory.hpp"
-  "${OpenSslHttpClient_SOURCE_DIR}/include/ohc/url.hpp"
+  "${HttpClient_SOURCE_DIR}/include/ohc/buffer.hpp"
+  "${HttpClient_SOURCE_DIR}/include/ohc/http.hpp"
+  "${HttpClient_SOURCE_DIR}/include/ohc/session.hpp"
+  "${HttpClient_SOURCE_DIR}/include/ohc/session_factory.hpp"
+  "${HttpClient_SOURCE_DIR}/include/ohc/url.hpp"
 )
 
 add_library(ohc

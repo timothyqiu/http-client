@@ -2,22 +2,33 @@
 
 Attempt to implement an HTTP client in two ways: one via OpenSSL, one via MbedTLS.
 
-OpenSSL and MbedTLS should be installed separately on the build machine. Other dependencies of the project will be downloaded by CMake.
+## Build
 
-Sample command to build with OpenSSL installed via Homebrew:
+  # Install dependencies via [Conan](https://conan.io/)
+  $ conan install -if /path/to/build-dir .
 
-    OPENSSL_ROOT_DIR=/usr/local/opt/openssl@1.1/ cmake -S . -B /path/to/build-dir
-    cmake --build /path/to/build-dir
+  # Configure the project via [CMake](https://cmake.org/)
+  $ cmake -B /path/to/build-dir -S .
 
-Note: Getting the following link error means that you're linking against the system OpenSSL library. Likely that you are adding the `OPENSSL_ROOT_DIR` after a failed attempt. Clean up `/path/to/build-dir` and try again.
+  # Build the project
+  $ cmake --build /path/to/build-dir
 
-    ld: cannot link directly with dylib/framework, your binary is not an allowed client of /usr/lib/libcrypto.dylib for architecture x86_64
+  # Run tests (should have been built first)
+  $ cmake --build /path/to/build-dir --target test
 
-The `client` binary now supports setting basic proxy via the `http_proxy` and `https_proxy` environment variables:
+I used to install dependencies with CMake's [FetchContent](https://cmake.org/cmake/help/latest/module/FetchContent.html) module. It works fine, but it's a pain to use in mainland China, as HTTPS connections to GitHub are often throttled. I have to wait for several minutes to make a fresh build. Libraries that's not modern-cmake compatible can't be installed like this anyway. So a package manager seems necessary.
 
-    https_proxy=localhost:8080 /path/to/client https://httpbin.org/ip
+## Run
 
-## HTTP 1.0
+The `client` binary uses similar options to `curl`.
+
+    https_proxy=localhost:8080 /path/to/client -L https://httpbin.org/redirect/2
+
+OpenSSL and MbedTLS can be selected with the `--driver` option. Use `-h` to see the complete option list.
+
+## Notes
+
+### HTTP 1.0
 
 * One connection per request.
 * There are only three methods: `HEAD`, `GET`, `POST`.
@@ -26,13 +37,13 @@ The `client` binary now supports setting basic proxy via the `http_proxy` and `h
   * Missing `Content-Length` header means 0.
   * `HEAD` has no body, its `Content-Length` is the body size of a corresponding `GET` request.
 
-## HTTP 1.1
+### HTTP 1.1
 
 * Allows multiple requests per connection.
 * `Host` header is mandatory.
 * The client must support "chunked" transfer encoding, an alternative way to determine the content length.
 
-## Proxy
+### Proxy
 
 Envionment variables `http_proxy`, `https_proxy` are usually used to specifiy proxies.
 

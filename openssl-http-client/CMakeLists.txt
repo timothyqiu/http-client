@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.11)
 
-project(OpenSslHttpClient LANGUAGES CXX)
+project(HttpClient LANGUAGES CXX)
+
+set(CMAKE_MODULE_PATH "${CMAKE_BINARY_DIR}" "${CMAKE_MODULE_PATH}")
 
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
   set(CMAKE_CXX_EXTENSIONS OFF)
@@ -13,31 +15,15 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
   endif()
 endif()
 
-set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMake;${CMAKE_MODULE_PATH}")
-
-include(FetchContent)
-if(${CMAKE_VERSION} VERSION_LESS 3.14)
-    include(cmake/add_FetchContent_MakeAvailable.cmake)
-endif()
-
 find_package(OpenSSL REQUIRED)
-find_package(MbedTLS REQUIRED)
-
-FetchContent_Declare(
-  cli11
-  GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
-  GIT_TAG v1.9.0
-)
-FetchContent_Declare(
-  spdlog
-  GIT_REPOSITORY https://github.com/gabime/spdlog.git
-  GIT_TAG v1.5.0
-)
-FetchContent_MakeAvailable(cli11 spdlog)
+find_package(mbedtls REQUIRED)
+find_package(CLI11 REQUIRED)
+find_package(spdlog REQUIRED)
 
 add_subdirectory(src)
 add_subdirectory(apps)
 
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME AND BUILD_TESTING)
+  find_package(Catch2 REQUIRED)
   add_subdirectory(tests)
 endif()

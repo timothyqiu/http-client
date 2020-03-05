@@ -13,6 +13,5 @@ add_executable(client
 )
 target_link_libraries(client PRIVATE
   ohc::ohc CLI11::CLI11 spdlog::spdlog
-  OpenSSL::SSL
-  MbedTLS::TLS MbedTLS::Crypto MbedTLS::X509
+  OpenSSL::OpenSSL mbedtls::mbedtls
 )
