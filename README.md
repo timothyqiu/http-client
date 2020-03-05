@@ -28,8 +28,10 @@ OpenSSL and MbedTLS can be selected with the `--driver` option. Use `-h` to see 
 To run tests:
 
     cmake --build /path/to/build-dir --target test
+    # or, if you want to specify filters:
+    /path/to/build-dir/tests/test-library
 
-Currently, there are tests tagged `[network-required]` and `[proxy-required]` which needs special environment setup.
+To skip a specific tag, use the filter `~[tag]`. Currently, there are tests tagged `[network-required]` and `[proxy-required]` which needs special environment setup.
 
 ## Notes
 
