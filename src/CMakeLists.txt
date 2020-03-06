@@ -2,13 +2,14 @@ set(HEADER_LIST
   "${HttpClient_SOURCE_DIR}/include/ohc/buffer.hpp"
   "${HttpClient_SOURCE_DIR}/include/ohc/http.hpp"
   "${HttpClient_SOURCE_DIR}/include/ohc/session.hpp"
+  "${HttpClient_SOURCE_DIR}/include/ohc/session_config.hpp"
   "${HttpClient_SOURCE_DIR}/include/ohc/session_factory.hpp"
   "${HttpClient_SOURCE_DIR}/include/ohc/url.hpp"
 )
 
 add_library(ohc
   ${HEADER_LIST}
-  buffer.cpp http.cpp session.cpp session_factory.cpp url.cpp
+  buffer.cpp http.cpp session.cpp session_config.cpp session_factory.cpp url.cpp
 
   openssl/buffer.hpp openssl/buffer.cpp
   openssl/core.hpp openssl/core.cpp

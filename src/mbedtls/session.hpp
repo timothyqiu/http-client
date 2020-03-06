@@ -7,12 +7,12 @@
 
 class MbedTlsSession : public Session {
 public:
-    static std::unique_ptr<Session> create(HttpVersion version, ProxyRegistry const& proxyRegistry);
+    static std::unique_ptr<Session> create(SessionConfig const& config);
 
-    MbedTlsSession(HttpVersion version, ProxyRegistry const& proxyRegistry);
+    MbedTlsSession(SessionConfig const& config);
 
 private:
-    std::unique_ptr<SslConfig> config_;
+    std::unique_ptr<SslConfig> sslConfig_;
 
     std::unique_ptr<SslContext> ssl_;
     std::unique_ptr<SslContext> proxySsl_;

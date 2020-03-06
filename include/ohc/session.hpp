@@ -3,37 +3,26 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <ohc/buffer.hpp>
 #include <ohc/http.hpp>
+#include <ohc/session_config.hpp>
 
 class Session {
 public:
-    Session(HttpVersion version, ProxyRegistry const& proxyRegistry);
+    Session(SessionConfig const& config);
     virtual ~Session();
 
-    auto version() const { return version_; }
+    auto config() -> SessionConfig const& { return config_; }
 
-    bool insecure() const { return insecure_; }
-    void insecure(bool value) { insecure_ = value; }
-    bool proxyInsecure() const { return proxyInsecure_; }
-    void proxyInsecure(bool value) { proxyInsecure_ = value; }
-
-    auto caCert() const { return caCert_; }
-    void caCert(std::string value);
-    auto caPath() const { return caPath_; }
-    void caPath(std::string value);
+    auto get(std::string_view const& url) { return this->get(parseUrl(url)); }
 
     auto get(Url const& url) -> Response;
     auto request(Request const& req) -> Response;
 
 private:
 
-    HttpVersion version_;
-    ProxyRegistry proxyRegistry_;
-    bool insecure_;
-    bool proxyInsecure_;
-    std::string caCert_;
-    std::string caPath_;
+    SessionConfig config_;
 
     Url serverIdentity_;
 

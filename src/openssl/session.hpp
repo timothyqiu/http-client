@@ -7,9 +7,9 @@
 
 class OpenSslSession : public Session {
 public:
-    static std::unique_ptr<Session> create(HttpVersion version, ProxyRegistry const& proxyRegistry);
+    static std::unique_ptr<Session> create(SessionConfig const& config);
 
-    OpenSslSession(HttpVersion version, ProxyRegistry const& proxyRegistry);
+    OpenSslSession(SessionConfig const& config);
 
 private:
     BioPtr bio_;

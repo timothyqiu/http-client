@@ -16,12 +16,12 @@ SessionFactory::SessionFactory()
 }
 
 auto SessionFactory::create(std::string const& name,
-                            HttpVersion version, ProxyRegistry const& proxyRegistry) -> SessionPtr
+                            SessionConfig const& config) -> SessionPtr
 {
     auto& registry = SessionFactory::instance().registry_;
 
     if (auto const iter = registry.find(name); iter != std::end(registry)) {
-        return iter->second(version, proxyRegistry);
+        return iter->second(config);
     }
     return nullptr;
 }

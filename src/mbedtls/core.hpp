@@ -9,6 +9,8 @@
 #include <mbedtls/ssl.h>
 #include <mbedtls/x509_crt.h>
 
+#include <ohc/session_config.hpp>
+
 template <typename T, void (*InitFunc)(T *), void (*FreeFunc)(T *)>
 class MbedTlsObject {
 public:
@@ -34,7 +36,7 @@ using X509Cert = MbedTlsObject<mbedtls_x509_crt, mbedtls_x509_crt_init, mbedtls_
 
 class SslConfig {
 public:
-    explicit SslConfig(std::string const& cert, std::string const& path);
+    explicit SslConfig(SessionConfig const& sessionConfig);
     ~SslConfig();
 
     mbedtls_ssl_config const *get() const { return &config_; }

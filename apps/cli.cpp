@@ -24,6 +24,11 @@ try {
     app.add_flag_callback("--http1.0", [&](){ httpVersion = HttpVersion::VERSION_1_0; }, "Uses HTTP 1.0");
     app.add_flag_callback("--http1.1", [&](){ httpVersion = HttpVersion::VERSION_1_1; }, "Uses HTTP 1.1");
 
+    TlsVersion minTlsVersion{TlsVersion::VERSION_1_2};
+    app.add_flag_callback("--tlsv1.0", [&](){ minTlsVersion = TlsVersion::VERSION_1_0; }, "Use TLSv1.0 or greater");
+    app.add_flag_callback("--tlsv1.1", [&](){ minTlsVersion = TlsVersion::VERSION_1_1; }, "Use TLSv1.1 or greater");
+    app.add_flag_callback("--tlsv1.2", [&](){ minTlsVersion = TlsVersion::VERSION_1_2; }, "Use TLSv1.2 or greater");
+
     std::string httpProxy;
     app.add_option("--http-proxy", httpProxy, "The proxy server to use for HTTP")->envname("http_proxy");
     std::string httpsProxy;
@@ -47,29 +52,32 @@ try {
 
     CLI11_PARSE(app, argc, argv);
 
+    // Preparation done
+
     spdlog::set_level(isVerbose ? spdlog::level::debug : spdlog::level::warn);
 
-    ProxyRegistry proxy;
-    if (!httpProxy.empty()) {
-        proxy.set("http", parseUrl(httpProxy, "http"));
-    }
-    if (!httpsProxy.empty()) {
-        proxy.set("https", parseUrl(httpsProxy, "http"));
-    }
-
-    auto session = SessionFactory::create(driver, httpVersion, proxy);
-    if (!session) {
-        throw std::runtime_error{"no such driver: " + driver};
-    }
-
-    session->insecure(insecure);
-    session->proxyInsecure(proxyInsecure);
+    auto configBuilder = SessionConfig::Builder()
+        .httpVersion(httpVersion)
+        .minTlsVersion(minTlsVersion)
+        .insecure(insecure)
+        .proxyInsecure(proxyInsecure);
 
     if (!caCert.empty()) {
-        session->caCert(caCert);
+        configBuilder.caCert(caCert);
     }
     if (!caPath.empty()) {
-        session->caPath(caPath);
+        configBuilder.caPath(caPath);
+    }
+    if (!httpProxy.empty()) {
+        configBuilder.httpProxy(httpProxy);
+    }
+    if (!httpsProxy.empty()) {
+        configBuilder.httpsProxy(httpsProxy);
+    }
+
+    auto session = SessionFactory::create(driver, configBuilder.build());
+    if (!session) {
+        throw std::runtime_error{"no such driver: " + driver};
     }
 
     Url requestUrl = parseUrl(url, "http");

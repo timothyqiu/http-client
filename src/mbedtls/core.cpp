@@ -2,43 +2,37 @@
 #include <spdlog/spdlog.h>
 #include "exceptions.hpp"
 
-static void loadDefaultCerts(mbedtls_x509_crt *x509)
-{
-    // TODO: windows location?
-    char const *cert = "/etc/ssl/cert.pem";
-    char const *path = "/etc/ssl/certs";
-
-    auto const certErr = mbedtls_x509_crt_parse_file(x509, cert);
-    auto const pathErr = mbedtls_x509_crt_parse_path(x509, path);
-
-    if (certErr != 0 && pathErr != 0) {
-        spdlog::error("Can't load default certs from {}: {}", cert, mbedTlsTranslateError(certErr));
-        spdlog::error("Can't load default certs from {}: {}", path, mbedTlsTranslateError(pathErr));
-        throw std::runtime_error{"can't load default certs"};
-    }
-}
-
-SslConfig::SslConfig(std::string const& cert, std::string const& path)
+SslConfig::SslConfig(SessionConfig const& sessionConfig)
 {
     if (auto const err = mbedtls_ctr_drbg_seed(generator_.get(), mbedtls_entropy_func, entropy_.get(), nullptr, 0); err != 0) {
         throw MbedTlsError{"mbedtls_ctr_drbg_seed", err};
     }
 
-    if (cert.empty() && path.empty()) {
+    if (sessionConfig.useDefaultCa()) {
 
-        loadDefaultCerts(cert_.get());
+        auto const& caCert = SessionConfig::defaultCaCert();
+        auto const& caPath = SessionConfig::defaultCaPath();
+
+        auto const certErr = mbedtls_x509_crt_parse_file(cert_.get(), caCert.c_str());
+        auto const pathErr = mbedtls_x509_crt_parse_path(cert_.get(), caPath.c_str());
+
+        if (certErr != 0 && pathErr != 0) {
+            spdlog::error("Can't load default certs from {}: {}", caCert, mbedTlsTranslateError(certErr));
+            spdlog::error("Can't load default certs from {}: {}", caPath, mbedTlsTranslateError(pathErr));
+            throw std::runtime_error{"can't load default certs"};
+        }
 
     } else {
 
-        if (!cert.empty()) {
-            if (auto const err = mbedtls_x509_crt_parse_file(cert_.get(), cert.c_str()); err != 0) {
+        if (auto const& caCert = sessionConfig.caCert(); caCert) {
+            if (auto const err = mbedtls_x509_crt_parse_file(cert_.get(), caCert->c_str()); err != 0) {
                 // > 0 partial success
                 throw MbedTlsError{"mbedtls_x509_crt_parse_file", err};
             }
         }
 
-        if (!path.empty()) {
-            if (auto const err = mbedtls_x509_crt_parse_path(cert_.get(), path.c_str()); err != 0) {
+        if (auto const& caPath = sessionConfig.caPath(); caPath) {
+            if (auto const err = mbedtls_x509_crt_parse_path(cert_.get(), caPath->c_str()); err != 0) {
                 // > 0 partial success
                 throw MbedTlsError{"mbedtls_x509_crt_parse_path", err};
             }
@@ -54,6 +48,23 @@ SslConfig::SslConfig(std::string const& cert, std::string const& path)
     mbedtls_ssl_conf_rng(&config_, mbedtls_ctr_drbg_random, generator_.get());
     mbedtls_ssl_conf_ca_chain(&config_, cert_.get(), nullptr);
     mbedtls_ssl_conf_authmode(&config_, MBEDTLS_SSL_VERIFY_OPTIONAL);
+
+    // MbedTLS treats TLS1.0 as SSL3.1, so this has an offset
+    int version = 0;
+    switch (sessionConfig.minTlsVersion()) {
+    case TlsVersion::VERSION_1_0:
+        version = MBEDTLS_SSL_MINOR_VERSION_1;
+        break;
+    case TlsVersion::VERSION_1_1:
+        version = MBEDTLS_SSL_MINOR_VERSION_2;
+        break;
+    case TlsVersion::VERSION_1_2:
+        version = MBEDTLS_SSL_MINOR_VERSION_3;
+        break;
+    }
+    assert(version != 0);
+
+    mbedtls_ssl_conf_min_version(&config_, MBEDTLS_SSL_MAJOR_VERSION_3, version);
 }
 
 SslConfig::~SslConfig()

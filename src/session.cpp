@@ -1,33 +1,25 @@
 #include <ohc/session.hpp>
 #include <spdlog/spdlog.h>
 
-Session::Session(HttpVersion version, ProxyRegistry const& proxyRegistry)
-    : version_{version}, proxyRegistry_{proxyRegistry}
-    , insecure_{false}, proxyInsecure_{false}
+Session::Session(SessionConfig const& config)
+    : config_{config}
 {
 }
 
 Session::~Session() = default;
 
-void Session::caCert(std::string value)
-{
-    caCert_ = std::move(value);
-    this->resetSslConfig();
-}
-
-void Session::caPath(std::string value)
-{
-    caPath_ = std::move(value);
-    this->resetSslConfig();
-}
-
 auto Session::get(Url const& url) -> Response
 {
     Request req;
-    req.version = version_;
+    req.version = config_.httpVersion();
     req.method("GET");
     req.url = url;
-    req.proxy = proxyRegistry_.get(url.scheme);
+
+    if (url.scheme == "http") {
+        req.proxy = config_.httpProxy();
+    } else if (url.scheme == "https") {
+        req.proxy = config_.httpsProxy();
+    }
 
     return this->request(req);
 }
@@ -56,7 +48,7 @@ auto Session::request(Request const& req) -> Response
         throw;
     }
 
-    switch (version_) {
+    switch (config_.httpVersion()) {
     case HttpVersion::VERSION_1_0:
         this->closeConnection();
         break;
@@ -81,7 +73,7 @@ bool Session::canReuseCurrentConnection(Request const& req) const
     }
 
     // connection should be closed after each request/response, not before
-    if (this->version() == HttpVersion::VERSION_1_0) {
+    if (config_.httpVersion() == HttpVersion::VERSION_1_0) {
         spdlog::warn("connection not closed after a http 1.0 request");
         return false;
     }
@@ -105,7 +97,7 @@ void Session::setupHttps(Request const& req)
     if (req.proxy) {
         // the proxy server is using https
         if (req.proxy->scheme == "https") {
-            this->performHttpsPrologue(req.proxy->host, !this->proxyInsecure());
+            this->performHttpsPrologue(req.proxy->host, !config_.proxyInsecure());
         }
 
         // tunneling https connection
@@ -129,7 +121,7 @@ void Session::setupHttps(Request const& req)
 
     // target server is using https
     if (req.url.scheme == "https") {
-        this->performHttpsPrologue(req.url.host, !this->insecure());
+        this->performHttpsPrologue(req.url.host, !config_.insecure());
     }
 }
 

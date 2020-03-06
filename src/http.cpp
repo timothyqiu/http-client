@@ -26,32 +26,6 @@ static std::string toUpper(std::string_view view)
     return result;
 }
 
-void ProxyRegistry::set(std::string_view scheme, Url const& url)
-{
-    assert(scheme == "http" || scheme == "https");
-
-    if (url.scheme != "http" && url.scheme != "https") {
-        throw std::runtime_error{std::string{scheme} + " proxy scheme not supported: " + std::string{url.scheme}};
-    }
-    if (url.host.empty()) {
-        throw std::runtime_error{std::string{scheme} + " proxy missing host"};
-    }
-    if (url.port.empty()) {
-        throw std::runtime_error{std::string{scheme} + " proxy missing port"};
-    }
-
-    servers[std::string{scheme}] = url;
-}
-
-std::optional<Url> ProxyRegistry::get(std::string_view scheme) const
-{
-    auto const iter = servers.find(std::string{scheme});
-    if (iter == std::end(servers)) {
-        return {};
-    }
-    return iter->second;
-}
-
 auto Request::method() const -> std::string_view
 {
     return method_;

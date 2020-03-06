@@ -5,14 +5,14 @@
 #include "buffer.hpp"
 #include "exceptions.hpp"
 
-std::unique_ptr<Session> MbedTlsSession::create(HttpVersion version, ProxyRegistry const& proxyRegistry)
+std::unique_ptr<Session> MbedTlsSession::create(SessionConfig const& config)
 {
     spdlog::debug("Creating session with {}", MBEDTLS_VERSION_STRING_FULL);
-    return std::make_unique<MbedTlsSession>(version, proxyRegistry);
+    return std::make_unique<MbedTlsSession>(config);
 }
 
-MbedTlsSession::MbedTlsSession(HttpVersion version, ProxyRegistry const& proxyRegistry)
-    : Session{version, proxyRegistry}
+MbedTlsSession::MbedTlsSession(SessionConfig const& config)
+    : Session{config}
 {
 }
 
@@ -42,7 +42,7 @@ void MbedTlsSession::closeConnection()
 void MbedTlsSession::resetSslConfig()
 {
     this->closeConnection();
-    config_.reset();
+    sslConfig_.reset();
 }
 
 void MbedTlsSession::performHttpsPrologue(std::string const& hostname, bool verify)
@@ -87,15 +87,14 @@ void MbedTlsSession::performHttpsPrologue(std::string const& hostname, bool veri
     if (verify) {
         auto const flags = mbedtls_ssl_get_verify_result(ssl_->get());
         if (flags != 0) {
+            // TODO: dedicated exception?
             char buffer[512];
             auto const n = mbedtls_x509_crt_verify_info(buffer, sizeof(buffer), "", flags);
             if (n > 0) {
                 buffer[n - 1] = '\0';  // get rid of the newline
             }
             spdlog::error("Certificate verification failed: {}", buffer);
-            if (verify) {
-                throw std::runtime_error{"certification verification failed"};
-            }
+            throw std::runtime_error{"certification verification failed"};
         }
     }
 }
@@ -111,9 +110,9 @@ auto MbedTlsSession::createBuffer() -> std::unique_ptr<Buffer>
 
 auto MbedTlsSession::getSslConfig() -> mbedtls_ssl_config const *
 {
-    if (!config_) {
+    if (!sslConfig_) {
         // TODO: don't use hardcoded path
-        config_ = std::make_unique<SslConfig>(this->caCert(), this->caPath());
+        sslConfig_ = std::make_unique<SslConfig>(this->config());
     }
-    return config_->get();
+    return sslConfig_->get();
 }

@@ -8,10 +8,9 @@
 class SessionFactory {
 public:
     using SessionPtr = std::unique_ptr<Session>;
-    using CreatorFunc = SessionPtr(*)(HttpVersion, ProxyRegistry const&);
+    using CreatorFunc = SessionPtr(*)(SessionConfig const&);
 
-    static auto create(std::string const& name,
-                       HttpVersion version, ProxyRegistry const& proxyRegistry) -> SessionPtr;
+    static auto create(std::string const& name, SessionConfig const& config) -> SessionPtr;
 
 private:
     static SessionFactory& instance();

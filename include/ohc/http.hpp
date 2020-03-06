@@ -14,15 +14,6 @@
 
 enum class HttpVersion { VERSION_1_0, VERSION_1_1 };
 
-class ProxyRegistry {
-public:
-    void set(std::string_view scheme, Url const& url);
-    std::optional<Url> get(std::string_view scheme) const;
-
-private:
-    std::map<std::string, Url> servers;
-};
-
 class Request {
 public:
     // TODO: property setter?

@@ -9,30 +9,15 @@
 
 static_assert(OPENSSL_VERSION_NUMBER >= 0x10100000L, "Use OpenSSL version 1.0.1 or later");
 
-std::unique_ptr<Session> OpenSslSession::create(HttpVersion version, ProxyRegistry const& proxyRegistry)
+std::unique_ptr<Session> OpenSslSession::create(SessionConfig const& config)
 {
     spdlog::debug("Creating session with {}", OPENSSL_VERSION_TEXT);
-    return std::make_unique<OpenSslSession>(version, proxyRegistry);
+    return std::make_unique<OpenSslSession>(config);
 }
 
-OpenSslSession::OpenSslSession(HttpVersion version, ProxyRegistry const& proxyRegistry)
-    : Session{version, proxyRegistry}
+OpenSslSession::OpenSslSession(SessionConfig const& config)
+    : Session{config}
 {
-}
-
-static void loadDefaultCerts(SSL_CTX *ctx)
-{
-    // TODO: windows location?
-    char const *cert = "/etc/ssl/cert.pem";
-    char const *path = "/etc/ssl/certs";
-
-    auto const certFailed = SSL_CTX_load_verify_locations(ctx, cert, nullptr) < 1;
-    auto const pathFailed = SSL_CTX_load_verify_locations(ctx, nullptr, path) < 1;
-
-    if (certFailed && pathFailed) {
-        throw OpenSslError{"loadDefaultCerts"};
-    }
-    // TODO: cleanup openssl error code?
 }
 
 auto OpenSslSession::getSslContext() -> SSL_CTX *
@@ -43,16 +28,43 @@ auto OpenSslSession::getSslContext() -> SSL_CTX *
             throw OpenSslError{"error SSL_CTX_new"};
         }
 
-        if (SSL_CTX_set_min_proto_version(sslCtx_.get(), TLS1_2_VERSION) < 1) {
+        auto const& config = this->config();
+
+        int minTlsVersion = 0;
+        switch (config.minTlsVersion()) {
+        case TlsVersion::VERSION_1_0:
+            minTlsVersion = TLS1_VERSION;
+            break;
+        case TlsVersion::VERSION_1_1:
+            minTlsVersion = TLS1_1_VERSION;
+            break;
+        case TlsVersion::VERSION_1_2:
+            minTlsVersion = TLS1_2_VERSION;
+            break;
+        }
+        assert(minTlsVersion != 0);
+
+        if (SSL_CTX_set_min_proto_version(sslCtx_.get(), minTlsVersion) < 1) {
             throw OpenSslError{"error SSL_CTX_set_min_proto_version"};
         }
 
-        if (caCert().empty() && caPath().empty()) {
-            loadDefaultCerts(sslCtx_.get());
+        if (config.useDefaultCa()) {
+
+            auto const& caCert = SessionConfig::defaultCaCert();
+            auto const& caPath = SessionConfig::defaultCaPath();
+
+            auto const certFailed = SSL_CTX_load_verify_locations(sslCtx_.get(), caCert.c_str(), nullptr) < 1;
+            auto const pathFailed = SSL_CTX_load_verify_locations(sslCtx_.get(), nullptr, caPath.c_str()) < 1;
+
+            if (certFailed && pathFailed) {
+                throw OpenSslError{"loadDefaultCerts"};
+            }
+            // TODO: cleanup openssl error code?
+
         } else {
             if (SSL_CTX_load_verify_locations(sslCtx_.get(),
-                                              caCert().empty() ? nullptr : caCert().c_str(),
-                                              caPath().empty() ? nullptr : caPath().c_str()) < 1)
+                                              config.caCert() ? config.caCert()->c_str() : nullptr,
+                                              config.caPath() ? config.caCert()->c_str() : nullptr) < 1)
             {
                 throw OpenSslError{"error SSL_CTX_load_verify_locations"};
             }
