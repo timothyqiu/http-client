@@ -60,7 +60,11 @@ void MbedTlsSession::performHttpsPrologue(std::string const& hostname, bool veri
         assert(!proxySsl_);
         proxySsl_.swap(ssl_);
 
-        mbedtls_ssl_set_bio(ssl->get(), proxySsl_->get(), mbedtls_net_send, mbedtls_net_recv, nullptr);
+        // this case (https over https tunnel) is hard to find
+        mbedtls_ssl_set_bio(ssl->get(), proxySsl_->get(),
+                            reinterpret_cast<mbedtls_ssl_send_t *>(mbedtls_ssl_write),
+                            reinterpret_cast<mbedtls_ssl_recv_t *>(mbedtls_ssl_read),
+                            nullptr);
     } else {
         mbedtls_ssl_set_bio(ssl->get(), net_->get(), mbedtls_net_send, mbedtls_net_recv, nullptr);
     }

@@ -40,7 +40,7 @@ public:
     auto httpProxy() const { return httpProxy_; }
     auto httpsProxy() const { return httpsProxy_; }
     auto insecure() const { return insecure_; }
-    auto proxyInsecure() const { return insecure_; }
+    auto proxyInsecure() const { return proxyInsecure_; }
 
     auto useDefaultCa() const { return !caCert_ && !caPath_; }
 
