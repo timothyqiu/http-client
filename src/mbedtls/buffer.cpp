@@ -27,7 +27,7 @@ void NetCtxBuffer::pull()
 
     int const n = mbedtls_net_recv(ctx_, buffer, bufferSize);
     if (n == 0) {
-        throw std::runtime_error{"end of stream reached"};
+        throw EndOfStreamError{};
     }
     if (n < 0) {
         // TODO: detail & dedicated exception
@@ -60,7 +60,7 @@ void SslCtxBuffer::pull()
 
     int const n = mbedtls_ssl_read(ctx_, buffer, bufferSize);
     if (n == 0) {
-        throw std::runtime_error{"end of stream reached"};
+        throw EndOfStreamError{};
     }
     if (n < 0) {
         // TODO: detail & dedicated exception

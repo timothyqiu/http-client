@@ -10,7 +10,7 @@ char const *mbedTlsTranslateError(int error)
 }
 
 MbedTlsError::MbedTlsError(char const *message, int error)
-    : std::runtime_error{message}
+    : OhcException{message}
 {
     char buffer[256];
     mbedtls_strerror(error, buffer, sizeof(buffer));

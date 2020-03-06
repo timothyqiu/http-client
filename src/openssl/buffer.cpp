@@ -30,7 +30,7 @@ void BioBuffer::pull()
             return;
         }
         if (n == 0) {
-            throw std::runtime_error{"end of stream reached"};
+            throw EndOfStreamError{};
         }
         throw OpenSslError{"error reading data"};
     }

@@ -108,18 +108,18 @@ void OpenSslSession::performHttpsPrologue(std::string const& hostname, bool veri
     if (verify) {
         auto const error = SSL_get_verify_result(ssl);
         if (error != X509_V_OK) {
-            throw std::runtime_error{X509_verify_cert_error_string(error)};
+            throw OhcException{X509_verify_cert_error_string(error)};
         }
 
         // SSL_get_verify_result returns OK when no cert is available
         auto *cert = SSL_get_peer_certificate(ssl);
         if (cert == nullptr) {
-            throw std::runtime_error{"no certificate available"};
+            throw OhcException{"no certificate available"};
         }
 
         // vaild certificate, but site mismatch
         if (X509_check_host(cert, hostname.data(), hostname.size(), 0, nullptr) < 1) {
-            throw std::runtime_error{"host mismatch"};
+            throw OhcException{"host mismatch"};
         }
 
         // TODO: revoked certificate

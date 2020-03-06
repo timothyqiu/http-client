@@ -5,8 +5,9 @@
 #include <cctype>
 #include <regex>
 
-// TODO: should log be here?
 #include <spdlog/spdlog.h>
+
+#include <ohc/exceptions.hpp>
 
 static std::string toLower(std::string_view view)
 {
@@ -91,7 +92,7 @@ Response readResponseFromBuffer(Request const& req, Buffer& buffer)
         {
             // TODO: make a dedicated exception, store instead of print
             spdlog::error("Bad status line: {}", line);
-            throw std::runtime_error{"bad status line"};
+            throw OhcException{"bad status line"};
         }
         resp.statusCode = std::stoi(match.str(1));
         spdlog::debug("Status code received: {}", resp.statusCode);
@@ -158,7 +159,7 @@ Response readResponseFromBuffer(Request const& req, Buffer& buffer)
                 {
                     // TODO: make a dedicated exception, store instead of print
                     spdlog::error("Bad chunk header: {}", line);
-                    throw std::runtime_error{"bad chunk header"};
+                    throw OhcException{"bad chunk header"};
                 }
 
                 size_t const chunkSize = std::stoul(match.str(1), nullptr, 16);
@@ -187,7 +188,7 @@ Response readResponseFromBuffer(Request const& req, Buffer& buffer)
             }
 
         } else {
-            throw std::runtime_error{"unsupported transfer encoding: " + resp.transferEncoding};
+            throw OhcException{"unsupported transfer encoding: " + resp.transferEncoding};
         }
     }
 

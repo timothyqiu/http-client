@@ -1,6 +1,7 @@
 #include <catch2/catch.hpp>
 
 #include <ohc/url.hpp>
+#include <ohc/exceptions.hpp>
 
 TEST_CASE("parseUrl should handle valid URLs", "[url]") {
     SECTION("complete URL") {
@@ -119,7 +120,7 @@ TEST_CASE("absoluteUrlString should work", "[url]") {
 
     SECTION("refuse it scheme not specified") {
         url.scheme = "";
-        REQUIRE_THROWS(absoluteUrlString(url));
+        REQUIRE_THROWS_AS(absoluteUrlString(url), OhcException);
     }
 }
 

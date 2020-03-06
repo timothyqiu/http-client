@@ -1,14 +1,14 @@
-#ifndef APPS_MBEDTLS_EXCEPTIONS_HPP_
-#define APPS_MBEDTLS_EXCEPTIONS_HPP_
+#ifndef OHC_MBEDTLS_EXCEPTIONS_HPP_
+#define OHC_MBEDTLS_EXCEPTIONS_HPP_
 
-#include <stdexcept>
+#include <ohc/exceptions.hpp>
 
 // static buffer
 char const *mbedTlsTranslateError(int error);
 
-class MbedTlsError : public std::runtime_error {
+class MbedTlsError : public OhcException {
 public:
     MbedTlsError(char const *message, int error);
 };
 
-#endif  // APPS_MBEDTLS_EXCEPTIONS_HPP_
+#endif  // OHC_MBEDTLS_EXCEPTIONS_HPP_

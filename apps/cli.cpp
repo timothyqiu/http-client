@@ -6,6 +6,7 @@
 #include <CLI/CLI.hpp>
 #include <spdlog/spdlog.h>
 
+#include <ohc/exceptions.hpp>
 #include <ohc/http.hpp>
 #include <ohc/session_factory.hpp>
 #include <ohc/url.hpp>
@@ -109,6 +110,10 @@ try {
 
         break;
     }
+}
+catch (OhcException const& e) {
+    spdlog::error("OhcException: {}", e.what());
+    return EXIT_FAILURE;
 }
 catch (std::exception const& e) {
     spdlog::error("Exception: {}", e.what());

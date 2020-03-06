@@ -2,7 +2,8 @@
 
 #include <algorithm>
 #include <cctype>
-#include <stdexcept>
+
+#include <ohc/exceptions.hpp>
 
 std::string Url::authority() const
 {
@@ -102,7 +103,7 @@ std::string relativeUrlString(Url const& url, bool allowFragment)
 std::string absoluteUrlString(Url const& url, bool allowFragment)
 {
     if (url.scheme.empty()) {
-        throw std::runtime_error{"missing scheme"};
+        throw OhcException{"missing scheme"};
     }
     auto const& userinfo = url.userinfo.empty() ? "" : url.userinfo + "@";
     auto const& port = url.port.empty() || url.port == portFromScheme(url.scheme) ? "" : ":" + url.port;

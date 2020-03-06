@@ -1,6 +1,7 @@
 #include <catch2/catch.hpp>
 #include <rapidjson/document.h>
 
+#include <ohc/exceptions.hpp>
 #include <ohc/session_factory.hpp>
 
 TEST_CASE("direct request", "[session][network-required]") {
@@ -98,10 +99,10 @@ TEST_CASE("bad ssl", "[session][network-required]") {
         auto session = SessionFactory::create(GENERATE("openssl", "mbedtls"), config);
         REQUIRE(session);
 
-        REQUIRE_THROWS(session->get("https://expired.badssl.com/"));
-        REQUIRE_THROWS(session->get("https://wrong.host.badssl.com/"));
-        REQUIRE_THROWS(session->get("https://self-signed.badssl.com/"));
-        REQUIRE_THROWS(session->get("https://untrusted-root.badssl.com/"));
+        REQUIRE_THROWS_AS(session->get("https://expired.badssl.com/"), OhcException);
+        REQUIRE_THROWS_AS(session->get("https://wrong.host.badssl.com/"), OhcException);
+        REQUIRE_THROWS_AS(session->get("https://self-signed.badssl.com/"), OhcException);
+        REQUIRE_THROWS_AS(session->get("https://untrusted-root.badssl.com/"), OhcException);
     }
 
     SECTION("insecure") {
@@ -137,7 +138,7 @@ TEST_CASE("min TLS version", "[session][network-required]") {
         auto session = SessionFactory::create(GENERATE("openssl", "mbedtls"), config);
         REQUIRE(session);
 
-        REQUIRE_THROWS(session->get("https://tls-v1-0.badssl.com:1010/"));
+        REQUIRE_THROWS_AS(session->get("https://tls-v1-0.badssl.com:1010/"), OhcException);
         REQUIRE_NOTHROW(session->get("https://tls-v1-1.badssl.com:1011/"));
         REQUIRE_NOTHROW(session->get("https://tls-v1-2.badssl.com:1012/"));
     }
@@ -149,8 +150,8 @@ TEST_CASE("min TLS version", "[session][network-required]") {
         auto session = SessionFactory::create(GENERATE("openssl", "mbedtls"), config);
         REQUIRE(session);
 
-        REQUIRE_THROWS(session->get("https://tls-v1-0.badssl.com:1010/"));
-        REQUIRE_THROWS(session->get("https://tls-v1-1.badssl.com:1011/"));
+        REQUIRE_THROWS_AS(session->get("https://tls-v1-0.badssl.com:1010/"), OhcException);
+        REQUIRE_THROWS_AS(session->get("https://tls-v1-1.badssl.com:1011/"), OhcException);
         REQUIRE_NOTHROW(session->get("https://tls-v1-2.badssl.com:1012/"));
     }
 }

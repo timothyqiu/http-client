@@ -1,7 +1,7 @@
 #include <ohc/buffer.hpp>
 #include <algorithm>
 #include <cassert>
-#include <stdexcept>
+#include <ohc/exceptions.hpp>
 
 Buffer::Buffer()
     : write_{0} , read_{0}
@@ -59,7 +59,7 @@ void Buffer::dropLiteral(std::string_view literal)
     auto const actual = this->peekAsString(literal.size());
     if (actual != literal) {
         // TODO: a dedicated exception
-        throw std::runtime_error{"unexpected literal"};
+        throw OhcException{"unexpected literal"};
     }
     read_ += literal.size();
 }

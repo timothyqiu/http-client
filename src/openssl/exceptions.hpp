@@ -1,11 +1,11 @@
-#ifndef APPS_OPENSSL_EXCEPTION_HPP_
-#define APPS_OPENSSL_EXCEPTION_HPP_
+#ifndef OHC_OPENSSL_EXCEPTION_HPP_
+#define OHC_OPENSSL_EXCEPTION_HPP_
 
-#include <stdexcept>
+#include <ohc/exceptions.hpp>
 
-class OpenSslError : public std::runtime_error {
+class OpenSslError : public OhcException {
 public:
     explicit OpenSslError(char const *message);
 };
 
-#endif  // APPS_OPENSSL_EXCEPTION_HPP_
+#endif  // OHC_OPENSSL_EXCEPTION_HPP_

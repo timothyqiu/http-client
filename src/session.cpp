@@ -1,5 +1,6 @@
 #include <ohc/session.hpp>
 #include <spdlog/spdlog.h>
+#include <ohc/exceptions.hpp>
 
 Session::Session(SessionConfig const& config)
     : config_{config}
@@ -114,7 +115,7 @@ void Session::setupHttps(Request const& req)
             if (!resp.isSuccess()) {
                 // TODO: make a dedicated exception?
                 spdlog::error("Proxy server returned {} for CONNECT", resp.statusCode);
-                throw std::runtime_error{"proxy server refused"};
+                throw OhcException{"proxy server refused"};
             }
         }
     }

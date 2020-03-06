@@ -94,7 +94,7 @@ void MbedTlsSession::performHttpsPrologue(std::string const& hostname, bool veri
                 buffer[n - 1] = '\0';  // get rid of the newline
             }
             spdlog::error("Certificate verification failed: {}", buffer);
-            throw std::runtime_error{"certification verification failed"};
+            throw OhcException{"certification verification failed"};
         }
     }
 }

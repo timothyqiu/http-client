@@ -19,7 +19,7 @@ SslConfig::SslConfig(SessionConfig const& sessionConfig)
         if (certErr != 0 && pathErr != 0) {
             spdlog::error("Can't load default certs from {}: {}", caCert, mbedTlsTranslateError(certErr));
             spdlog::error("Can't load default certs from {}: {}", caPath, mbedTlsTranslateError(pathErr));
-            throw std::runtime_error{"can't load default certs"};
+            throw OhcException{"can't load default certs"};
         }
 
     } else {
