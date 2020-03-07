@@ -7,5 +7,4 @@ openssl/1.1.1d
 mbedtls/2.16.3-apache
 
 [generators]
-cmake
 cmake_find_package
