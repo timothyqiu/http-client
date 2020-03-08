@@ -44,13 +44,13 @@ Url parseUrl(std::string_view view, std::string_view defaultScheme)
     }
 
     {
-        size_t n = view.size();
+        size_t endOfNetloc = view.size();
         for (auto const c : "/?#") {
-            n = std::min(n, view.find(c));
+            endOfNetloc = std::min(endOfNetloc, view.find(c));
         }
 
         // netloc(userinfo@host:port)
-        std::string_view netloc{view.data(), n};
+        std::string_view netloc{view.data(), endOfNetloc};
 
         if (auto const n = netloc.find('@'); n != netloc.npos) {
             url.userinfo = std::string{netloc.data(), n};
@@ -64,7 +64,7 @@ Url parseUrl(std::string_view view, std::string_view defaultScheme)
             url.host = netloc;
         }
 
-        view = std::string_view{view.data() + n, view.size() - n};
+        view = std::string_view{view.data() + endOfNetloc, view.size() - endOfNetloc};
     }
 
     if (url.port.empty()) {
