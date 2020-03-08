@@ -6,8 +6,8 @@
 
 namespace ohc::utils {
 
-std::string toLower(std::string_view view);
-std::string toUpper(std::string_view view);
+auto toLower(std::string_view view) -> std::string;
+auto toUpper(std::string_view view) -> std::string;
 
 }  // namespace ohc
 

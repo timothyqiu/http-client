@@ -5,7 +5,7 @@
 #include <ohc/exceptions.hpp>
 #include "utils.hpp"
 
-std::string Url::authority() const
+auto Url::authority() const -> std::string
 {
     if (port.empty()) {
         return host;
@@ -19,7 +19,7 @@ bool Url::isRelative() const
 }
 
 // TODO: some optimization? use static object?
-static std::string portFromScheme(std::string_view scheme)
+static auto portFromScheme(std::string_view scheme) -> std::string
 {
     if (scheme == "http") {
         return "80";
@@ -30,7 +30,7 @@ static std::string portFromScheme(std::string_view scheme)
     return "";  // not recognized
 }
 
-Url parseUrl(std::string_view view, std::string_view defaultScheme)
+auto parseUrl(std::string_view view, std::string_view defaultScheme) -> Url
 {
     Url url;
 
@@ -89,7 +89,7 @@ Url parseUrl(std::string_view view, std::string_view defaultScheme)
     return url;
 }
 
-std::string relativeUrlString(Url const& url, bool allowFragment)
+auto relativeUrlString(Url const& url, bool allowFragment) -> std::string
 {
     auto const& path = url.path.empty() ? "/" : url.path;
     auto const& query = url.query.empty() ? "" : "?" + url.query;
@@ -97,7 +97,7 @@ std::string relativeUrlString(Url const& url, bool allowFragment)
     return path + query + fragment;
 }
 
-std::string absoluteUrlString(Url const& url, bool allowFragment)
+auto absoluteUrlString(Url const& url, bool allowFragment) -> std::string
 {
     if (url.scheme.empty()) {
         throw OhcException{"missing scheme"};

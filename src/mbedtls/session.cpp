@@ -1,11 +1,12 @@
 #include "session.hpp"
+#include <array>
 #include <cassert>
 #include <mbedtls/version.h>
 #include <spdlog/spdlog.h>
 #include "buffer.hpp"
 #include "exceptions.hpp"
 
-std::unique_ptr<Session> MbedTlsSession::create(SessionConfig const& config)
+auto MbedTlsSession::create(SessionConfig const& config) -> SessionPtr
 {
     spdlog::debug("Creating session with {}", MBEDTLS_VERSION_STRING_FULL);
     return std::make_unique<MbedTlsSession>(config);
@@ -92,12 +93,12 @@ void MbedTlsSession::performHttpsPrologue(std::string const& hostname, bool veri
         auto const flags = mbedtls_ssl_get_verify_result(ssl_->get());
         if (flags != 0) {
             // TODO: dedicated exception?
-            char buffer[512];
-            auto const n = mbedtls_x509_crt_verify_info(buffer, sizeof(buffer), "", flags);
+            std::array<char, 512> buffer;
+            auto const n = mbedtls_x509_crt_verify_info(buffer.data(), buffer.size(), "", flags);
             if (n > 0) {
                 buffer[n - 1] = '\0';  // get rid of the newline
             }
-            spdlog::error("Certificate verification failed: {}", buffer);
+            spdlog::error("Certificate verification failed: {}", buffer.data());
             throw OhcException{"certification verification failed"};
         }
     }

@@ -4,7 +4,7 @@
 #include <ohc/exceptions.hpp>
 
 // static buffer
-char const *mbedTlsTranslateError(int error);
+auto mbedTlsTranslateError(int error) -> char const *;
 
 class MbedTlsError : public OhcException {
 public:

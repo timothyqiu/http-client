@@ -5,7 +5,7 @@
 #include "mbedtls/session.hpp"
 #include "openssl/session.hpp"
 
-SessionFactory& SessionFactory::instance()
+auto SessionFactory::instance() -> SessionFactory&
 {
     static SessionFactory instance;
     return instance;

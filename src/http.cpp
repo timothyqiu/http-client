@@ -18,7 +18,7 @@ void Request::method(std::string_view value)
     method_ = ohc::utils::toUpper(value);
 }
 
-std::string Request::makeRequestUri() const
+auto Request::makeRequestUri() const -> std::string
 {
     if (method_ == "CONNECT") {
         assert(!connectAuthority.host.empty() && !connectAuthority.port.empty());
@@ -30,7 +30,7 @@ std::string Request::makeRequestUri() const
     return relativeUrlString(url);
 }
 
-std::string Request::makeMessage() const
+auto Request::makeMessage() const -> std::string
 {
     std::string versionMark;
     std::string header;
@@ -55,7 +55,7 @@ bool Response::isSuccess() const
     return category < 4;
 }
 
-Response readResponseFromBuffer(Request const& req, Buffer& buffer)
+auto readResponseFromBuffer(Request const& req, Buffer& buffer) -> Response
 {
     Response resp;
 

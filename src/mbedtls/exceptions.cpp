@@ -1,18 +1,19 @@
 #include "exceptions.hpp"
+#include <array>
 #include <mbedtls/error.h>
 #include <spdlog/spdlog.h>
 
-char const *mbedTlsTranslateError(int error)
+auto mbedTlsTranslateError(int error) -> char const *
 {
-    static char buffer[256];
-    mbedtls_strerror(error, buffer, sizeof(buffer));
-    return buffer;
+    static std::array<char, 256> buffer;
+    mbedtls_strerror(error, buffer.data(), buffer.size());
+    return buffer.data();
 }
 
 MbedTlsError::MbedTlsError(char const *message, int error)
     : OhcException{message}
 {
-    char buffer[256];
-    mbedtls_strerror(error, buffer, sizeof(buffer));
-    spdlog::error("{} ({}): {}", message, error, std::string{buffer});
+    std::array<char, 256> buffer;
+    mbedtls_strerror(error, buffer.data(), buffer.size());
+    spdlog::error("{} ({}): {}", message, error, buffer.data());
 }

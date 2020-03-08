@@ -4,7 +4,7 @@
 
 namespace ohc::utils {
 
-std::string toLower(std::string_view view)
+auto toLower(std::string_view view) -> std::string
 {
     std::string result{view};
     std::transform(std::begin(result), std::end(result),
@@ -13,7 +13,7 @@ std::string toLower(std::string_view view)
     return result;
 }
 
-std::string toUpper(std::string_view view)
+auto toUpper(std::string_view view) -> std::string
 {
     std::string result{view};
     std::transform(std::begin(result), std::end(result),

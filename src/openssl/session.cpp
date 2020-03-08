@@ -10,7 +10,7 @@
 
 static_assert(OPENSSL_VERSION_NUMBER >= 0x10100000L, "Use OpenSSL version 1.0.1 or later");
 
-std::unique_ptr<Session> OpenSslSession::create(SessionConfig const& config)
+auto OpenSslSession::create(SessionConfig const& config) -> SessionPtr
 {
     spdlog::debug("Creating session with {}", OPENSSL_VERSION_TEXT);
     return std::make_unique<OpenSslSession>(config);

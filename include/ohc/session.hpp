@@ -13,7 +13,7 @@ class Buffer;
 
 class Session {
 public:
-    Session(SessionConfig const& config);
+    Session(SessionConfig config);
     virtual ~Session();
 
     auto config() -> SessionConfig const& { return config_; }
@@ -41,5 +41,7 @@ private:
     virtual void performHttpsPrologue(std::string const& hostname, bool verify) = 0;
     virtual auto createBuffer() -> std::unique_ptr<Buffer> = 0;
 };
+
+using SessionPtr = std::unique_ptr<Session>;
 
 #endif  // OHC_SESSION_HPP_

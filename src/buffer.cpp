@@ -16,7 +16,7 @@ void Buffer::write(void const *data, size_t size)
     }
 }
 
-uint8_t *Buffer::getBuffer(size_t size)
+auto Buffer::getBuffer(size_t size) -> uint8_t *
 {
     while (buffer_.size() < write_ + size) {
         buffer_.resize(std::max(buffer_.size() * 2, buffer_.size() + size));
@@ -30,18 +30,18 @@ void Buffer::markWritten(size_t size)
     write_ += size;
 }
 
-size_t Buffer::readableSize() const
+auto Buffer::readableSize() const -> size_t
 {
     assert(read_ <= write_);
     return write_ - read_;
 }
 
-std::string_view Buffer::peekAsString() const
+auto Buffer::peekAsString() const -> std::string_view
 {
     return this->peekAsString(this->readableSize());
 }
 
-std::string_view Buffer::peekAsString(size_t size) const
+auto Buffer::peekAsString(size_t size) const -> std::string_view
 {
     assert(size <= this->readableSize());
     return {
@@ -64,7 +64,7 @@ void Buffer::dropLiteral(std::string_view literal)
     read_ += literal.size();
 }
 
-std::string_view Buffer::readLine()
+auto Buffer::readLine() -> std::string_view
 {
     std::string_view const eol{"\r\n"};
     while (true) {
@@ -79,7 +79,7 @@ std::string_view Buffer::readLine()
     }
 }
 
-std::vector<uint8_t> Buffer::readAsVector(size_t size)
+auto Buffer::readAsVector(size_t size) -> std::vector<uint8_t>
 {
     while (this->readableSize() < size) {
         this->pull();

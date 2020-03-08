@@ -13,16 +13,16 @@ struct Url {
     std::string query;
     std::string fragment;
 
-    std::string authority() const;  // without userinfo
+    auto authority() const -> std::string;  // without userinfo
 
     bool isRelative() const;
 };
 
-Url parseUrl(std::string_view view, std::string_view defaultScheme={});
+auto parseUrl(std::string_view view, std::string_view defaultScheme={}) -> Url;
 
 // relative to root
-std::string relativeUrlString(Url const& url, bool allowFragment=false);
+auto relativeUrlString(Url const& url, bool allowFragment=false) -> std::string;
 
-std::string absoluteUrlString(Url const& url, bool allowFragment=false);
+auto absoluteUrlString(Url const& url, bool allowFragment=false) -> std::string;
 
 #endif  // OHC_URL_HPP_

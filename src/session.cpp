@@ -3,8 +3,8 @@
 #include <ohc/buffer.hpp>
 #include <ohc/exceptions.hpp>
 
-Session::Session(SessionConfig const& config)
-    : config_{config}
+Session::Session(SessionConfig config)
+    : config_{std::move(config)}
 {
 }
 

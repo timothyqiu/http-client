@@ -7,7 +7,7 @@
 
 class OpenSslSession : public Session {
 public:
-    static std::unique_ptr<Session> create(SessionConfig const& config);
+    static auto create(SessionConfig const& config) -> SessionPtr;
 
     OpenSslSession(SessionConfig const& config);
 

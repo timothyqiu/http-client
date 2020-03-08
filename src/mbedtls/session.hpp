@@ -7,7 +7,7 @@
 
 class MbedTlsSession : public Session {
 public:
-    static std::unique_ptr<Session> create(SessionConfig const& config);
+    static auto create(SessionConfig const& config) -> SessionPtr;
 
     MbedTlsSession(SessionConfig const& config);
 
