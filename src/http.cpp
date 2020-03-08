@@ -1,31 +1,12 @@
 #include <ohc/http.hpp>
 
-#include <algorithm>
 #include <cassert>
-#include <cctype>
 #include <regex>
 
 #include <spdlog/spdlog.h>
 
 #include <ohc/exceptions.hpp>
-
-static std::string toLower(std::string_view view)
-{
-    std::string result{view};
-    std::transform(std::begin(result), std::end(result),
-                   std::begin(result),
-                   [](char c) { return std::tolower(c); });
-    return result;
-}
-
-static std::string toUpper(std::string_view view)
-{
-    std::string result{view};
-    std::transform(std::begin(result), std::end(result),
-                   std::begin(result),
-                   [](char c) { return std::toupper(c); });
-    return result;
-}
+#include "utils.hpp"
 
 auto Request::method() const -> std::string_view
 {
@@ -34,7 +15,7 @@ auto Request::method() const -> std::string_view
 
 void Request::method(std::string_view value)
 {
-    method_ = toUpper(value);
+    method_ = ohc::utils::toUpper(value);
 }
 
 std::string Request::makeRequestUri() const
@@ -115,7 +96,7 @@ Response readResponseFromBuffer(Request const& req, Buffer& buffer)
             continue;
         }
 
-        std::string name = toLower(match.str(1));
+        std::string name = ohc::utils::toLower(match.str(1));
 
         // FIXME: should handle duplicated headers
         if (auto iter = resp.headers.find(name); iter != std::end(resp.headers)) {
@@ -127,7 +108,7 @@ Response readResponseFromBuffer(Request const& req, Buffer& buffer)
 
     if (auto const iter = resp.headers.find("transfer-encoding"); iter != std::end(resp.headers)) {
         // FIXME: should allow multiple transfer-encoding headers
-        resp.transferEncoding = toLower(iter->second);
+        resp.transferEncoding = ohc::utils::toLower(iter->second);
     } else {
         resp.transferEncoding = "identity";
     }

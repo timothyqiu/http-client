@@ -11,6 +11,8 @@ add_library(ohc
   ${HEADER_LIST}
   buffer.cpp http.cpp session.cpp session_config.cpp session_factory.cpp url.cpp
 
+  utils.hpp utils.cpp
+
   openssl/buffer.hpp openssl/buffer.cpp
   openssl/core.hpp openssl/core.cpp
   openssl/exceptions.hpp openssl/exceptions.cpp

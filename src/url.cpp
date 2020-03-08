@@ -1,9 +1,7 @@
 #include <ohc/url.hpp>
 
-#include <algorithm>
-#include <cctype>
-
 #include <ohc/exceptions.hpp>
+#include "utils.hpp"
 
 std::string Url::authority() const
 {
@@ -35,10 +33,7 @@ Url parseUrl(std::string_view view, std::string_view defaultScheme)
     Url url;
 
     if (auto const n = view.find("://"); n != std::string_view::npos) {
-        url.scheme = std::string{view.data(), n};
-        std::transform(std::begin(url.scheme), std::end(url.scheme),
-                       std::begin(url.scheme),
-                       [](char c) { return std::tolower(c); });
+        url.scheme = ohc::utils::toLower({view.data(), n});
 
         auto const offset = n + 3;
         view = std::string_view{view.data() + offset, view.size() - offset};
