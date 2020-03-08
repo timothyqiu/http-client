@@ -9,7 +9,7 @@ class MbedTlsSession : public Session {
 public:
     static auto create(SessionConfig const& config) -> SessionPtr;
 
-    MbedTlsSession(SessionConfig const& config);
+    explicit MbedTlsSession(SessionConfig const& config);
 
 private:
     std::unique_ptr<SslConfig> sslConfig_;

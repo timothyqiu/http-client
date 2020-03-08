@@ -9,7 +9,7 @@ class OpenSslSession : public Session {
 public:
     static auto create(SessionConfig const& config) -> SessionPtr;
 
-    OpenSslSession(SessionConfig const& config);
+    explicit OpenSslSession(SessionConfig const& config);
 
 private:
     BioPtr bio_;
