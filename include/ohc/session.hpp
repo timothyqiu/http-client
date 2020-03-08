@@ -4,9 +4,12 @@
 #include <memory>
 #include <string>
 #include <string_view>
-#include <ohc/buffer.hpp>
+
 #include <ohc/http.hpp>
 #include <ohc/session_config.hpp>
+#include <ohc/url.hpp>
+
+class Buffer;
 
 class Session {
 public:

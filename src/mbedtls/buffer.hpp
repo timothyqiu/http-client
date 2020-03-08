@@ -1,6 +1,9 @@
 #ifndef APPS_MBEDTLS_BUFER_HPP_
 #define APPS_MBEDTLS_BUFER_HPP_
 
+#include <cstddef>
+#include <cstdint>
+
 #include <ohc/buffer.hpp>
 #include <mbedtls/net_sockets.h>
 #include <mbedtls/ssl.h>

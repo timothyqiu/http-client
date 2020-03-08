@@ -1,7 +1,7 @@
 #include <catch2/catch.hpp>
 
-#include <ohc/url.hpp>
 #include <ohc/exceptions.hpp>
+#include <ohc/url.hpp>
 
 TEST_CASE("parseUrl should handle valid URLs", "[url]") {
     SECTION("complete URL") {

@@ -8,6 +8,8 @@
 
 #include <ohc/exceptions.hpp>
 #include <ohc/http.hpp>
+#include <ohc/session.hpp>
+#include <ohc/session_config.hpp>
 #include <ohc/session_factory.hpp>
 #include <ohc/url.hpp>
 

@@ -1,6 +1,9 @@
 #ifndef APPS_OPENSSL_BUFER_HPP_
 #define APPS_OPENSSL_BUFER_HPP_
 
+#include <cstddef>
+#include <cstdint>
+
 #include <ohc/buffer.hpp>
 #include <openssl/bio.h>
 

@@ -1,15 +1,13 @@
 #ifndef APPS_MBEDTLS_CORE_HPP_
 #define APPS_MBEDTLS_CORE_HPP_
 
-#include <string>
-
 #include <mbedtls/ctr_drbg.h>
 #include <mbedtls/entropy.h>
 #include <mbedtls/net_sockets.h>
 #include <mbedtls/ssl.h>
 #include <mbedtls/x509_crt.h>
 
-#include <ohc/session_config.hpp>
+class SessionConfig;
 
 template <typename T, void (*InitFunc)(T *), void (*FreeFunc)(T *)>
 class MbedTlsObject {

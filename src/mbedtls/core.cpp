@@ -1,5 +1,10 @@
 #include "core.hpp"
+
+#include <cassert>
 #include <spdlog/spdlog.h>
+
+#include <ohc/exceptions.hpp>
+#include <ohc/session_config.hpp>
 #include "exceptions.hpp"
 
 SslConfig::SslConfig(SessionConfig const& sessionConfig)

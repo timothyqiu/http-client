@@ -1,5 +1,6 @@
 #include "buffer.hpp"
 #include <cassert>
+#include <ohc/exceptions.hpp>
 #include "exceptions.hpp"
 
 BioBuffer::BioBuffer(BIO *bio)

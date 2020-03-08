@@ -1,5 +1,7 @@
 #include <ohc/session_factory.hpp>
 
+#include <ohc/session.hpp>
+
 #include "mbedtls/session.hpp"
 #include "openssl/session.hpp"
 

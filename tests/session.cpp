@@ -2,6 +2,7 @@
 #include <rapidjson/document.h>
 
 #include <ohc/exceptions.hpp>
+#include <ohc/session.hpp>
 #include <ohc/session_factory.hpp>
 
 TEST_CASE("direct request", "[session][network-required]") {

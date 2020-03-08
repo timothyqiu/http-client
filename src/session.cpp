@@ -1,5 +1,6 @@
 #include <ohc/session.hpp>
 #include <spdlog/spdlog.h>
+#include <ohc/buffer.hpp>
 #include <ohc/exceptions.hpp>
 
 Session::Session(SessionConfig const& config)

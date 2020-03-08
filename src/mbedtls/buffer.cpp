@@ -1,6 +1,6 @@
 #include "buffer.hpp"
 
-#include <cassert>
+#include <ohc/exceptions.hpp>
 #include "exceptions.hpp"
 
 NetCtxBuffer::NetCtxBuffer(mbedtls_net_context *ctx)

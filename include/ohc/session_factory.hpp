@@ -3,7 +3,9 @@
 
 #include <map>
 #include <memory>
-#include <ohc/session.hpp>
+
+class Session;
+class SessionConfig;
 
 class SessionFactory {
 public:

@@ -1,5 +1,7 @@
 #include <ohc/url.hpp>
 
+#include <algorithm>
+
 #include <ohc/exceptions.hpp>
 #include "utils.hpp"
 
