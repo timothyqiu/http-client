@@ -69,3 +69,10 @@ After connecting to the proxy server:
   * Issue a `CONNECT` request, the request URI in the request line should be the target server host and port.
     * The `Host` header should use the proxy server host, because this `CONNECT` request itself is sent to the proxy server.
   * Then, do normal HTTPS requests on the established connection (handshake first, then send requests etc...).
+
+---
+
+This was part of my [playground](https://github.com/timothyqiu/playground) repository and later moved to this separate repository using [git-filter-repo](https://github.com/newren/git-filter-repo).
+
+    # the http-client subdirectory was renamed from openssl-http-client earlier
+    git filter-repo --path http-client/ --path openssl-http-client/ --path-rename http-client/:
