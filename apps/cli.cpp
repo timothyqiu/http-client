@@ -50,6 +50,9 @@ try {
     bool isFollow{false};
     app.add_flag("-L,--location", isFollow, "Follow redirects");
 
+    int maxRedirs{50};  // -1 means unlimited
+    app.add_option("--max-redirs", maxRedirs, "Maximum number of redirects allowed");
+
     bool isVerbose{false};
     app.add_flag("--verbose", isVerbose, "Make the operation more talkative");
 
@@ -83,6 +86,7 @@ try {
         throw std::runtime_error{"no such driver: " + driver};
     }
 
+    int numRedirected = 0;
     Url requestUrl{url, "http"};
     while (true) {
         auto const resp = session->get(requestUrl);
@@ -92,6 +96,12 @@ try {
             // TODO: don't redirect if non-GET
             auto const location = resp.headers.at("location");
             spdlog::debug("Redirect to: {}", location);
+
+            numRedirected++;
+            if (maxRedirs != -1 && numRedirected > maxRedirs) {
+                throw std::runtime_error{"too many redirects"};
+            }
+
             requestUrl = Url{location, requestUrl};
             continue;
         }
