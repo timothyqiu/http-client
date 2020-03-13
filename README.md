@@ -17,7 +17,7 @@ Build the project with [CMake](https://cmake.org/) and [Conan](https://conan.io/
 
 I used to install dependencies with CMake's [FetchContent](https://cmake.org/cmake/help/latest/module/FetchContent.html) module. It works fine, but it's a pain to use in mainland China, as HTTPS connections to GitHub are often throttled. I have to wait for several minutes to make a fresh build. Libraries that's not modern-cmake compatible can't be installed like this anyway. So a package manager seems necessary.
 
-__Note:__ [CLI11](https://github.com/CLIUtils/CLI11) and [spdlog](https://github.com/gabime/spdlog) uses C++17's `std::filesystem`. It's known that GCC <= 8 requires to link a separate `libstdc++fs` library for that. This may results in "undefined reference" link errors, and I think CMake should have a proper solution like [this](https://gitlab.kitware.com/cmake/cmake/issues/17834).
+__Note:__ [CLI11](https://github.com/CLIUtils/CLI11) uses C++17's `std::filesystem`. It's known that GCC <= 8 requires to link a separate `libstdc++fs` library for that. This may results in "undefined reference" link errors, and I think CMake should have a proper solution like [this](https://gitlab.kitware.com/cmake/cmake/issues/17834). For now, I just copied the `FindFilesystem.cmake` module from [CMakeCM](https://github.com/vector-of-bool/CMakeCM).
 
 When using Visual Studio on Windows, note that Conan installs Release build by default (`-s build_type=Debug` to change), and CMake builds Debug by default (`--config Release`). Type mismatch will result in link errors.
 
