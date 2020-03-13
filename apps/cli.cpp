@@ -72,10 +72,10 @@ try {
         configBuilder.caPath(caPath);
     }
     if (!httpProxy.empty()) {
-        configBuilder.httpProxy(httpProxy);
+        configBuilder.httpProxy(Url{httpProxy, "http"});
     }
     if (!httpsProxy.empty()) {
-        configBuilder.httpsProxy(httpsProxy);
+        configBuilder.httpsProxy(Url{httpsProxy, "http"});
     }
 
     auto session = SessionFactory::create(driver, configBuilder.build());
@@ -83,7 +83,7 @@ try {
         throw std::runtime_error{"no such driver: " + driver};
     }
 
-    Url requestUrl = parseUrl(url, "http");
+    Url requestUrl{url, "http"};
     while (true) {
         auto const resp = session->get(requestUrl);
 
@@ -92,14 +92,7 @@ try {
             // TODO: don't redirect if non-GET
             auto const location = resp.headers.at("location");
             spdlog::debug("Redirect to: {}", location);
-            auto next = parseUrl(location);
-            if (next.isRelative()) {
-                next.scheme = requestUrl.scheme;
-                next.userinfo = requestUrl.userinfo;
-                next.host = requestUrl.host;
-                next.port = requestUrl.port;
-            }
-            requestUrl = next;
+            requestUrl = Url{location, requestUrl};
             continue;
         }
 

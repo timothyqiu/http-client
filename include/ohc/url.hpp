@@ -4,8 +4,9 @@
 #include <string>
 #include <string_view>
 
-struct Url {
-    std::string scheme;  // always lower case
+class Url {
+public:
+    // TODO: these fields have no strong restrictions applied currently
     std::string userinfo;
     std::string host;
     std::string port;
@@ -13,16 +14,35 @@ struct Url {
     std::string query;
     std::string fragment;
 
-    auto authority() const -> std::string;  // without userinfo
+public:
+    Url() = default;
 
-    bool isRelative() const;
+    explicit Url(std::string_view view);
+
+    // set the default scheme if not provided
+    Url(std::string_view view, std::string_view defaultScheme);
+
+    // view should be an absolute path, or a url string
+    Url(std::string_view view, Url const& baseUrl);
+
+    auto operator==(Url const& rhs) const -> bool {
+        return scheme_ == rhs.scheme_ && this->userinfo == rhs.userinfo
+            && this->host == rhs.host && this->port == rhs.port
+            && this->path == rhs.path && this->query == rhs.query
+            && this->fragment == rhs.fragment;
+    }
+
+    auto scheme() const -> std::string const& { return scheme_; }
+    void scheme(std::string_view value);
+
+    // host[:port]
+    auto authority() const -> std::string;
+
+    auto toRelativeString(bool allowFragment=false) const -> std::string;
+    auto toAbsoluteString(bool allowFragment=false) const -> std::string;
+
+private:
+    std::string scheme_;
 };
-
-auto parseUrl(std::string_view view, std::string_view defaultScheme={}) -> Url;
-
-// relative to root
-auto relativeUrlString(Url const& url, bool allowFragment=false) -> std::string;
-
-auto absoluteUrlString(Url const& url, bool allowFragment=false) -> std::string;
 
 #endif  // OHC_URL_HPP_

@@ -31,6 +31,12 @@ public:
         , httpProxy_{httpProxy}, httpsProxy_{httpsProxy}
         , insecure_{insecure}, proxyInsecure_{proxyInsecure}
     {
+        if (httpProxy_) {
+            checkProxyUrl(*httpProxy_);
+        }
+        if (httpsProxy_) {
+            checkProxyUrl(*httpsProxy_);
+        }
     }
 
     auto httpVersion() const { return httpVersion_; }
@@ -53,6 +59,8 @@ private:
     std::optional<Url> httpsProxy_;
     bool insecure_;
     bool proxyInsecure_;
+
+    static void checkProxyUrl(Url const& url);
 };
 
 class SessionConfig::Builder {
@@ -70,8 +78,8 @@ public:
     auto minTlsVersion(TlsVersion value) -> Builder& { minTlsVersion_ = value; return *this; }
     auto caCert(std::string value) -> Builder& { caCert_ = std::move(value); return *this; }
     auto caPath(std::string value) -> Builder& { caPath_ = std::move(value); return *this; }
-    auto httpProxy(std::string_view value) -> Builder& { httpProxy_ = parseUrl(value); return *this; }
-    auto httpsProxy(std::string_view value) -> Builder& { httpsProxy_ = parseUrl(value); return *this; }
+    auto httpProxy(Url value) -> Builder& { httpProxy_ = std::move(value); return *this; }
+    auto httpsProxy(Url value) -> Builder& { httpsProxy_ = std::move(value); return *this; }
     auto insecure(bool value) -> Builder& { insecure_ = value; return *this; }
     auto proxyInsecure(bool value) -> Builder& { proxyInsecure_ = value; return *this; }
 

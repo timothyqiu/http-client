@@ -17,8 +17,8 @@ TEST_CASE("direct request", "[session][network-required]") {
         rapidjson::Document doc;
         doc.Parse(reinterpret_cast<char const *>(resp.body.data()), resp.body.size());
 
-        auto const& url = parseUrl(doc["url"].GetString());
-        REQUIRE(url.scheme == "http");
+        auto const& url = Url{doc["url"].GetString()};
+        REQUIRE(url.scheme() == "http");
     }
 
     SECTION("https get") {
@@ -28,14 +28,14 @@ TEST_CASE("direct request", "[session][network-required]") {
         rapidjson::Document doc;
         doc.Parse(reinterpret_cast<char const *>(resp.body.data()), resp.body.size());
 
-        auto const& url = parseUrl(doc["url"].GetString());
-        REQUIRE(url.scheme == "https");
+        auto const& url = Url{doc["url"].GetString()};
+        REQUIRE(url.scheme() == "https");
     }
 }
 
 TEST_CASE("http proxy request", "[session][network-required][proxy-required]") {
     auto const config = SessionConfig::Builder{}
-        .httpProxy("http://127.0.0.1:8123/")
+        .httpProxy(Url{"http://127.0.0.1:8123/"})
         .build();
     auto session = SessionFactory::create(GENERATE("openssl", "mbedtls"), config);
     REQUIRE(session);
@@ -47,8 +47,8 @@ TEST_CASE("http proxy request", "[session][network-required][proxy-required]") {
         rapidjson::Document doc;
         doc.Parse(reinterpret_cast<char const *>(resp.body.data()), resp.body.size());
 
-        auto const& url = parseUrl(doc["url"].GetString());
-        REQUIRE(url.scheme == "http");
+        auto const& url = Url{doc["url"].GetString()};
+        REQUIRE(url.scheme() == "http");
     }
 
     SECTION("https get") {
@@ -58,14 +58,14 @@ TEST_CASE("http proxy request", "[session][network-required][proxy-required]") {
         rapidjson::Document doc;
         doc.Parse(reinterpret_cast<char const *>(resp.body.data()), resp.body.size());
 
-        auto const& url = parseUrl(doc["url"].GetString());
-        REQUIRE(url.scheme == "https");
+        auto const& url = Url{doc["url"].GetString()};
+        REQUIRE(url.scheme() == "https");
     }
 }
 
 TEST_CASE("https proxy request", "[session][network-required][proxy-required]") {
     auto const config = SessionConfig::Builder{}
-        .httpsProxy("http://127.0.0.1:8123/")
+        .httpsProxy(Url{"http://127.0.0.1:8123/"})
         .build();
     auto session = SessionFactory::create(GENERATE("openssl", "mbedtls"), config);
     REQUIRE(session);
@@ -77,8 +77,8 @@ TEST_CASE("https proxy request", "[session][network-required][proxy-required]") 
         rapidjson::Document doc;
         doc.Parse(reinterpret_cast<char const *>(resp.body.data()), resp.body.size());
 
-        auto const& url = parseUrl(doc["url"].GetString());
-        REQUIRE(url.scheme == "http");
+        auto const& url = Url{doc["url"].GetString()};
+        REQUIRE(url.scheme() == "http");
     }
 
     SECTION("https get") {
@@ -88,8 +88,8 @@ TEST_CASE("https proxy request", "[session][network-required][proxy-required]") 
         rapidjson::Document doc;
         doc.Parse(reinterpret_cast<char const *>(resp.body.data()), resp.body.size());
 
-        auto const& url = parseUrl(doc["url"].GetString());
-        REQUIRE(url.scheme == "https");
+        auto const& url = Url{doc["url"].GetString()};
+        REQUIRE(url.scheme() == "https");
     }
 }
 

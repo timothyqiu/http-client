@@ -17,9 +17,9 @@ auto Session::get(Url const& url) -> Response
     req.method("GET");
     req.url = url;
 
-    if (url.scheme == "http") {
+    if (url.scheme() == "http") {
         req.proxy = config_.httpProxy();
-    } else if (url.scheme == "https") {
+    } else if (url.scheme() == "https") {
         req.proxy = config_.httpsProxy();
     }
 
@@ -81,12 +81,12 @@ bool Session::canReuseCurrentConnection(Request const& req) const
     }
 
     // change of scheme
-    if (serverIdentity_.scheme != req.url.scheme) {
+    if (serverIdentity_.scheme() != req.url.scheme()) {
         return false;
     }
 
     // once connected to a http proxy, always there
-    if (req.url.scheme == "http" && req.proxy) {
+    if (req.url.scheme() == "http" && req.proxy) {
         return true;
     }
 
@@ -98,12 +98,12 @@ void Session::setupHttps(Request const& req)
     // proxy server setup
     if (req.proxy) {
         // the proxy server is using https
-        if (req.proxy->scheme == "https") {
+        if (req.proxy->scheme() == "https") {
             this->performHttpsPrologue(req.proxy->host, !config_.proxyInsecure());
         }
 
         // tunneling https connection
-        if (req.url.scheme == "https") {
+        if (req.url.scheme() == "https") {
             // HTTPS proxy CONNECT only available in 1.1
             Request proxyReq;
             proxyReq.version = HttpVersion::VERSION_1_1;
@@ -122,7 +122,7 @@ void Session::setupHttps(Request const& req)
     }
 
     // target server is using https
-    if (req.url.scheme == "https") {
+    if (req.url.scheme() == "https") {
         this->performHttpsPrologue(req.url.host, !config_.insecure());
     }
 }

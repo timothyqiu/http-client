@@ -5,19 +5,6 @@
 #include <ohc/exceptions.hpp>
 #include "utils.hpp"
 
-auto Url::authority() const -> std::string
-{
-    if (port.empty()) {
-        return host;
-    }
-    return host + ":" + port;
-}
-
-bool Url::isRelative() const
-{
-    return host.empty();
-}
-
 // TODO: some optimization? use static object?
 static auto portFromScheme(std::string_view scheme) -> std::string
 {
@@ -30,17 +17,20 @@ static auto portFromScheme(std::string_view scheme) -> std::string
     return "";  // not recognized
 }
 
-auto parseUrl(std::string_view view, std::string_view defaultScheme) -> Url
+Url::Url(std::string_view view)
+    : Url{view, ""}
 {
-    Url url;
+}
 
+Url::Url(std::string_view view, std::string_view defaultScheme)
+{
     if (auto const n = view.find("://"); n != std::string_view::npos) {
-        url.scheme = ohc::utils::toLower({view.data(), n});
+        this->scheme({view.data(), n});
 
         auto const offset = n + 3;
         view = std::string_view{view.data() + offset, view.size() - offset};
     } else {
-        url.scheme = defaultScheme;
+        this->scheme(defaultScheme);
     }
 
     {
@@ -53,59 +43,78 @@ auto parseUrl(std::string_view view, std::string_view defaultScheme) -> Url
         std::string_view netloc{view.data(), endOfNetloc};
 
         if (auto const n = netloc.find('@'); n != netloc.npos) {
-            url.userinfo = std::string{netloc.data(), n};
+            this->userinfo = std::string{netloc.data(), n};
             netloc = std::string_view{netloc.data() + (n + 1), netloc.size() - (n + 1)};
         }
 
         if (auto const n = netloc.find(':'); n != netloc.npos) {
-            url.host = std::string{netloc.data(), n};
-            url.port = std::string{netloc.data() + (n + 1), netloc.size() - (n + 1)};
+            this->host = std::string{netloc.data(), n};
+            this->port = std::string{netloc.data() + (n + 1), netloc.size() - (n + 1)};
         } else {
-            url.host = netloc;
+            this->host = netloc;
         }
 
         view = std::string_view{view.data() + endOfNetloc, view.size() - endOfNetloc};
     }
 
-    if (url.port.empty()) {
-        // url.port = url.scheme works as well
-        // but to keep 'port is an integer' true...
-        url.port = portFromScheme(url.scheme);
-        // TODO: should port be left empty?
+    if (this->port.empty()) {
+        this->port = portFromScheme(scheme_);
     }
 
     if (auto const n = view.find('#'); n != std::string_view::npos) {
-        url.fragment = std::string{view.data() + (n + 1), view.size() - (n + 1)};
+        this->fragment = std::string{view.data() + (n + 1), view.size() - (n + 1)};
         view = std::string_view{view.data(), n};
     }
 
     if (auto const n = view.find('?'); n != std::string_view::npos) {
-        url.query = std::string{view.data() + (n + 1), view.size() - (n + 1)};
+        this->query = std::string{view.data() + (n + 1), view.size() - (n + 1)};
         view = std::string_view{view.data(), n};
     }
 
-    url.path = view.empty() ? "/" : view;
-
-    return url;
+    this->path = view.empty() ? "/" : view;
 }
 
-auto relativeUrlString(Url const& url, bool allowFragment) -> std::string
+Url::Url(std::string_view view, Url const& baseUrl)
+    : Url{view}
 {
-    auto const& path = url.path.empty() ? "/" : url.path;
-    auto const& query = url.query.empty() ? "" : "?" + url.query;
-    auto const& fragment = !allowFragment || url.fragment.empty() ? "" : "#" + url.fragment;
+    if (scheme_.empty() && userinfo.empty() && host.empty() && port.empty()) {
+        scheme_ = baseUrl.scheme_;
+        this->userinfo = baseUrl.userinfo;
+        this->host = baseUrl.host;
+        this->port = baseUrl.port;
+    }
+}
+
+void Url::scheme(std::string_view value)
+{
+    scheme_ = ohc::utils::toLower(value);
+}
+
+auto Url::authority() const -> std::string
+{
+    if (port.empty()) {
+        return host;
+    }
+    return host + ":" + port;
+}
+
+auto Url::toRelativeString(bool allowFragment) const -> std::string
+{
+    auto const& path = this->path.empty() ? "/" : this->path;
+    auto const& query = this->query.empty() ? "" : "?" + this->query;
+    auto const& fragment = !allowFragment || this->fragment.empty() ? "" : "#" + this->fragment;
     return path + query + fragment;
 }
 
-auto absoluteUrlString(Url const& url, bool allowFragment) -> std::string
+auto Url::toAbsoluteString(bool allowFragment) const -> std::string
 {
-    if (url.scheme.empty()) {
+    if (this->scheme().empty()) {
         throw OhcException{"missing scheme"};
     }
-    auto const& userinfo = url.userinfo.empty() ? "" : url.userinfo + "@";
-    auto const& port = url.port.empty() || url.port == portFromScheme(url.scheme) ? "" : ":" + url.port;
-    auto const& path = url.path.empty() ? "/" : url.path;
-    auto const& query = url.query.empty() ? "" : "?" + url.query;
-    auto const& fragment = !allowFragment || url.fragment.empty() ? "" : "#" + url.fragment;
-    return url.scheme + "://" + userinfo + url.host + port + path + query + fragment;
+    auto const& userinfo = this->userinfo.empty() ? "" : this->userinfo + "@";
+    auto const& port = this->port.empty() || this->port == portFromScheme(this->scheme()) ? "" : ":" + this->port;
+    auto const& path = this->path.empty() ? "/" : this->path;
+    auto const& query = this->query.empty() ? "" : "?" + this->query;
+    auto const& fragment = !allowFragment || this->fragment.empty() ? "" : "#" + this->fragment;
+    return this->scheme() + "://" + userinfo + this->host + port + path + query + fragment;
 }

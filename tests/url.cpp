@@ -3,129 +3,177 @@
 #include <ohc/exceptions.hpp>
 #include <ohc/url.hpp>
 
-TEST_CASE("parseUrl should handle valid URLs", "[url]") {
-    SECTION("complete URL") {
-        auto const url = parseUrl("https://user:pass@httpbin.org:443/get?a=b&c=d#token");
-        REQUIRE(url.scheme == "https");
+char const *RAW_URL = "https://user:pass@httpbin.org:44301/get?a=b&c=d#token";
+char const *RAW_URL_WITHOUT_SCHEME = "user:pass@httpbin.org:44301/get?a=b&c=d#token";
+
+TEST_CASE("Url/default-constructor", "[url]") {
+
+    Url const url{};
+
+    REQUIRE(url.scheme().empty());
+    REQUIRE(url.userinfo.empty());
+    REQUIRE(url.host.empty());
+    REQUIRE(url.port.empty());
+    REQUIRE(url.path.empty());
+    REQUIRE(url.query.empty());
+    REQUIRE(url.fragment.empty());
+
+}
+
+TEST_CASE("Url/string-constructor", "[url]") {
+
+    SECTION("from complete string") {
+        Url const url{RAW_URL};
+        REQUIRE(url.scheme() == "https");
         REQUIRE(url.userinfo == "user:pass");
         REQUIRE(url.host == "httpbin.org");
-        REQUIRE(url.port == "443");
+        REQUIRE(url.port == "44301");
         REQUIRE(url.path == "/get");
         REQUIRE(url.query == "a=b&c=d");
         REQUIRE(url.fragment == "token");
     }
-    SECTION("simple URL") {
-        auto const url = parseUrl("http://localhost:8123/");
-        REQUIRE(url.host == "localhost");
-        REQUIRE(url.port == "8123");
-    }
-    SECTION("port from scheme") {
-        REQUIRE(parseUrl("http://localhost/").port == "80");
-        REQUIRE(parseUrl("https://localhost/").port == "443");
-    }
-}
 
-TEST_CASE("parseUrl should handle bad URLs", "[url]") {
-    SECTION("no path specified") {
-        REQUIRE(parseUrl("https://httpbin.org").path == "/");
-        REQUIRE(parseUrl("https://httpbin.org?a=b").path == "/");
-        REQUIRE(parseUrl("https://httpbin.org#token").path == "/");
+    SECTION("from string without scheme") {
+        Url const url{RAW_URL_WITHOUT_SCHEME};
+        REQUIRE(url.scheme().empty());
+        REQUIRE(url.userinfo == "user:pass");
+        REQUIRE(url.host == "httpbin.org");
+        REQUIRE(url.port == "44301");
+        REQUIRE(url.path == "/get");
+        REQUIRE(url.query == "a=b&c=d");
+        REQUIRE(url.fragment == "token");
     }
-    SECTION("allow omitting scheme") {
-        auto const url = parseUrl("localhost");
-        REQUIRE(url.scheme.empty());
-        REQUIRE(url.userinfo.empty());
-        REQUIRE(url.host == "localhost");
-        REQUIRE(url.port.empty());
-        REQUIRE(url.path == "/");
-        REQUIRE(url.query.empty());
-        REQUIRE(url.fragment.empty());
-    }
-}
 
-TEST_CASE("parseUrl should use default scheme parameter", "[url]") {
-    SECTION("no default scheme") {
-        auto const url = parseUrl("localhost");
-        REQUIRE(url.scheme.empty());
+    SECTION("from string without port") {
+        Url const url{"unknown://httpbin.org/"};
         REQUIRE(url.port.empty());
     }
-    SECTION("default scheme") {
-        auto const url = parseUrl("localhost", "http");
-        REQUIRE(url.scheme == "http");
+
+    SECTION("from string without port, but scheme recognized") {
+        Url const url{"http://httpbin.org/"};
         REQUIRE(url.port == "80");
     }
-    SECTION("default scheme won't affect port") {
-        auto const url = parseUrl("localhost:443", "http");
-        REQUIRE(url.scheme == "http");
-        REQUIRE(url.port == "443");
+
+    SECTION("from string without path") {
+        REQUIRE(Url{"https://httpbin.org"}.path == "/");
+        REQUIRE(Url{"https://httpbin.org?a=b"}.path == "/");
+        REQUIRE(Url{"https://httpbin.org#token"}.path == "/");
     }
+
 }
 
-TEST_CASE("relativeUrlString should work", "[url]") {
+TEST_CASE("Url/default-scheme-constructor", "[url]") {
+
+    SECTION("from string with scheme") {
+        Url const url{RAW_URL, "ftp"};
+        REQUIRE(url.scheme() == "https");
+        REQUIRE(url.userinfo == "user:pass");
+        REQUIRE(url.host == "httpbin.org");
+        REQUIRE(url.port == "44301");
+        REQUIRE(url.path == "/get");
+        REQUIRE(url.query == "a=b&c=d");
+        REQUIRE(url.fragment == "token");
+    }
+
+    SECTION("from string without scheme") {
+        Url const url{RAW_URL_WITHOUT_SCHEME, "http"};
+        REQUIRE(url.scheme() == "http");
+        REQUIRE(url.userinfo == "user:pass");
+        REQUIRE(url.host == "httpbin.org");
+        REQUIRE(url.port == "44301");
+        REQUIRE(url.path == "/get");
+        REQUIRE(url.query == "a=b&c=d");
+        REQUIRE(url.fragment == "token");
+    }
+
+}
+
+TEST_CASE("Url/relative-path-constructor", "[url]") {
+
+    Url const base{"http://localhost/path?base=true#base-fragment"};
+
+    SECTION("example") {
+        Url const url{"/absolute/path?with=query#fragment", base};
+        REQUIRE(url.scheme() == base.scheme());
+        REQUIRE(url.userinfo == base.userinfo);
+        REQUIRE(url.host == base.host);
+        REQUIRE(url.port == base.port);
+        REQUIRE(url.path == "/absolute/path");
+        REQUIRE(url.query == "with=query");
+        REQUIRE(url.fragment == "fragment");
+    }
+
+    SECTION("complete url") {
+        char const *raw = "https://httpbin.org/get?with=query";
+        REQUIRE(Url{raw, base} == Url{raw});
+    }
+
+}
+
+TEST_CASE("Url/scheme", "[url]") {
     Url url;
-    url.scheme = "http";
-    url.host = "localhost";
-    url.path = "/path";
-    url.query = "a=b";
+
+    url.scheme("HeLlO");
+    REQUIRE(url.scheme() == "hello");
+}
+
+TEST_CASE("Url/toRelativeString", "[url]") {
+    Url url{"http://localhost/path?a=b"};
 
     SECTION("basics") {
-        REQUIRE(relativeUrlString(url) == "/path?a=b");
+        REQUIRE(url.toRelativeString() == "/path?a=b");
     }
 
     SECTION("allow_fragment parameter") {
         url.fragment = "token";
 
-        REQUIRE(relativeUrlString(url) == relativeUrlString(url, false));
-        REQUIRE(relativeUrlString(url, false) == "/path?a=b");
-        REQUIRE(relativeUrlString(url, true) == "/path?a=b#token");
+        REQUIRE(url.toRelativeString() == url.toRelativeString(false));
+        REQUIRE(url.toRelativeString(false) == "/path?a=b");
+        REQUIRE(url.toRelativeString(true) == "/path?a=b#token");
     }
 
     SECTION("default path to / if ommitted") {
         url.path = "";
-        REQUIRE(relativeUrlString(url) == "/?a=b");
+        REQUIRE(url.toRelativeString() == "/?a=b");
     }
 }
 
-TEST_CASE("absoluteUrlString should work", "[url]") {
-    Url url;
-    url.scheme = "http";
-    url.host = "localhost";
-    url.path = "/path";
-    url.query = "a=b";
+TEST_CASE("Url/toAbsoluteString", "[url]") {
+    Url url{"http://localhost/path?a=b"};
 
     SECTION("basics") {
-        REQUIRE(absoluteUrlString(url) == "http://localhost/path?a=b");
+        REQUIRE(url.toAbsoluteString() == "http://localhost/path?a=b");
     }
 
     SECTION("allow_fragment parameter") {
         url.fragment = "token";
 
-        REQUIRE(absoluteUrlString(url) == absoluteUrlString(url, false));
-        REQUIRE(absoluteUrlString(url, false) == "http://localhost/path?a=b");
-        REQUIRE(absoluteUrlString(url, true) == "http://localhost/path?a=b#token");
+        REQUIRE(url.toAbsoluteString() == url.toAbsoluteString(false));
+        REQUIRE(url.toAbsoluteString(false) == "http://localhost/path?a=b");
+        REQUIRE(url.toAbsoluteString(true) == "http://localhost/path?a=b#token");
     }
 
     SECTION("default path to / if omitted") {
         url.path = "";
-        REQUIRE(absoluteUrlString(url) == "http://localhost/?a=b");
+        REQUIRE(url.toAbsoluteString() == "http://localhost/?a=b");
     }
 
     SECTION("omit port if it matches scheme") {
         url.port = "80";
-        REQUIRE(absoluteUrlString(url) == "http://localhost/path?a=b");
+        REQUIRE(url.toAbsoluteString() == "http://localhost/path?a=b");
 
         url.port = "8080";
-        REQUIRE(absoluteUrlString(url) == "http://localhost:8080/path?a=b");
+        REQUIRE(url.toAbsoluteString() == "http://localhost:8080/path?a=b");
     }
 
     SECTION("refuse it scheme not specified") {
-        url.scheme = "";
-        REQUIRE_THROWS_AS(absoluteUrlString(url), OhcException);
+        url.scheme("");
+        REQUIRE_THROWS_AS(url.toAbsoluteString(), OhcException);
     }
 }
 
 TEST_CASE("url authority", "[url]") {
-    Url url = parseUrl("http://localhost:8080/path?a=b#token");
+    Url url{"http://localhost:8080/path?a=b#token"};
 
     SECTION("normal case") {
         REQUIRE(url.authority() == "localhost:8080");

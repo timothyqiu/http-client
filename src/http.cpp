@@ -24,10 +24,10 @@ auto Request::makeRequestUri() const -> std::string
         assert(!connectAuthority.host.empty() && !connectAuthority.port.empty());
         return connectAuthority.authority();
     }
-    if (url.scheme == "http" && proxy) {
-        return absoluteUrlString(url);
+    if (url.scheme() == "http" && proxy) {
+        return url.toAbsoluteString();
     }
-    return relativeUrlString(url);
+    return url.toRelativeString();
 }
 
 auto Request::makeMessage() const -> std::string

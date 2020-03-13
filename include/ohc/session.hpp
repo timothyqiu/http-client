@@ -18,7 +18,7 @@ public:
 
     auto config() -> SessionConfig const& { return config_; }
 
-    auto get(std::string_view const& url) { return this->get(parseUrl(url)); }
+    auto get(std::string_view const& url) { return this->get(Url{url}); }
 
     auto get(Url const& url) -> Response;
     auto request(Request const& req) -> Response;
