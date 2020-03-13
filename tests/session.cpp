@@ -1,9 +1,11 @@
 #include <catch2/catch.hpp>
-#include <rapidjson/document.h>
+#include <nlohmann/json.hpp>
 
 #include <ohc/exceptions.hpp>
 #include <ohc/session.hpp>
 #include <ohc/session_factory.hpp>
+
+using json = nlohmann::json;
 
 TEST_CASE("direct request", "[session][network-required]") {
     auto const config = SessionConfig::Builder{}.build();
@@ -14,10 +16,7 @@ TEST_CASE("direct request", "[session][network-required]") {
         auto const& resp = session->get(Url{"http://httpbin.org/get"});
         REQUIRE(resp.statusCode == 200);
 
-        rapidjson::Document doc;
-        doc.Parse(reinterpret_cast<char const *>(resp.body.data()), resp.body.size());
-
-        auto const& url = Url{doc["url"].GetString()};
+        auto const& url = Url{json::parse(resp.body)["url"].get<std::string>()};
         REQUIRE(url.scheme() == "http");
     }
 
@@ -25,10 +24,7 @@ TEST_CASE("direct request", "[session][network-required]") {
         auto const& resp = session->get(Url{"https://httpbin.org/get"});
         REQUIRE(resp.statusCode == 200);
 
-        rapidjson::Document doc;
-        doc.Parse(reinterpret_cast<char const *>(resp.body.data()), resp.body.size());
-
-        auto const& url = Url{doc["url"].GetString()};
+        auto const& url = Url{json::parse(resp.body)["url"].get<std::string>()};
         REQUIRE(url.scheme() == "https");
     }
 }
@@ -44,10 +40,7 @@ TEST_CASE("http proxy request", "[session][network-required][proxy-required]") {
         auto const& resp = session->get(Url{"http://httpbin.org/get"});
         REQUIRE(resp.statusCode == 200);
 
-        rapidjson::Document doc;
-        doc.Parse(reinterpret_cast<char const *>(resp.body.data()), resp.body.size());
-
-        auto const& url = Url{doc["url"].GetString()};
+        auto const& url = Url{json::parse(resp.body)["url"].get<std::string>()};
         REQUIRE(url.scheme() == "http");
     }
 
@@ -55,10 +48,7 @@ TEST_CASE("http proxy request", "[session][network-required][proxy-required]") {
         auto const& resp = session->get(Url{"https://httpbin.org/get"});
         REQUIRE(resp.statusCode == 200);
 
-        rapidjson::Document doc;
-        doc.Parse(reinterpret_cast<char const *>(resp.body.data()), resp.body.size());
-
-        auto const& url = Url{doc["url"].GetString()};
+        auto const& url = Url{json::parse(resp.body)["url"].get<std::string>()};
         REQUIRE(url.scheme() == "https");
     }
 }
@@ -74,10 +64,7 @@ TEST_CASE("https proxy request", "[session][network-required][proxy-required]") 
         auto const& resp = session->get(Url{"http://httpbin.org/get"});
         REQUIRE(resp.statusCode == 200);
 
-        rapidjson::Document doc;
-        doc.Parse(reinterpret_cast<char const *>(resp.body.data()), resp.body.size());
-
-        auto const& url = Url{doc["url"].GetString()};
+        auto const& url = Url{json::parse(resp.body)["url"].get<std::string>()};
         REQUIRE(url.scheme() == "http");
     }
 
@@ -85,10 +72,7 @@ TEST_CASE("https proxy request", "[session][network-required][proxy-required]") 
         auto const& resp = session->get(Url{"https://httpbin.org/get"});
         REQUIRE(resp.statusCode == 200);
 
-        rapidjson::Document doc;
-        doc.Parse(reinterpret_cast<char const *>(resp.body.data()), resp.body.size());
-
-        auto const& url = Url{doc["url"].GetString()};
+        auto const& url = Url{json::parse(resp.body)["url"].get<std::string>()};
         REQUIRE(url.scheme() == "https");
     }
 }

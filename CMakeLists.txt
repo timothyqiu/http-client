@@ -44,6 +44,6 @@ add_subdirectory(apps)
 
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME AND BUILD_TESTING)
   find_package(Catch2 REQUIRED)
-  find_package(rapidjson REQUIRED)
+  find_package(nlohmann_json REQUIRED)
   add_subdirectory(tests)
 endif()
