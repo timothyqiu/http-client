@@ -16,9 +16,7 @@ public:
     Session(SessionConfig config);
     virtual ~Session();
 
-    auto config() -> SessionConfig const& { return config_; }
-
-    auto get(std::string_view const& url) { return this->get(Url{url}); }
+    auto config() const -> SessionConfig const& { return config_; }
 
     auto get(Url const& url) -> Response;
     auto request(Request const& req) -> Response;

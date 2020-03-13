@@ -11,7 +11,7 @@ TEST_CASE("direct request", "[session][network-required]") {
     REQUIRE(session);
 
     SECTION("http get") {
-        auto const& resp = session->get("http://httpbin.org/get");
+        auto const& resp = session->get(Url{"http://httpbin.org/get"});
         REQUIRE(resp.statusCode == 200);
 
         rapidjson::Document doc;
@@ -22,7 +22,7 @@ TEST_CASE("direct request", "[session][network-required]") {
     }
 
     SECTION("https get") {
-        auto const& resp = session->get("https://httpbin.org/get");
+        auto const& resp = session->get(Url{"https://httpbin.org/get"});
         REQUIRE(resp.statusCode == 200);
 
         rapidjson::Document doc;
@@ -41,7 +41,7 @@ TEST_CASE("http proxy request", "[session][network-required][proxy-required]") {
     REQUIRE(session);
 
     SECTION("http get") {
-        auto const& resp = session->get("http://httpbin.org/get");
+        auto const& resp = session->get(Url{"http://httpbin.org/get"});
         REQUIRE(resp.statusCode == 200);
 
         rapidjson::Document doc;
@@ -52,7 +52,7 @@ TEST_CASE("http proxy request", "[session][network-required][proxy-required]") {
     }
 
     SECTION("https get") {
-        auto const& resp = session->get("https://httpbin.org/get");
+        auto const& resp = session->get(Url{"https://httpbin.org/get"});
         REQUIRE(resp.statusCode == 200);
 
         rapidjson::Document doc;
@@ -71,7 +71,7 @@ TEST_CASE("https proxy request", "[session][network-required][proxy-required]") 
     REQUIRE(session);
 
     SECTION("http get") {
-        auto const& resp = session->get("http://httpbin.org/get");
+        auto const& resp = session->get(Url{"http://httpbin.org/get"});
         REQUIRE(resp.statusCode == 200);
 
         rapidjson::Document doc;
@@ -82,7 +82,7 @@ TEST_CASE("https proxy request", "[session][network-required][proxy-required]") 
     }
 
     SECTION("https get") {
-        auto const& resp = session->get("https://httpbin.org/get");
+        auto const& resp = session->get(Url{"https://httpbin.org/get"});
         REQUIRE(resp.statusCode == 200);
 
         rapidjson::Document doc;
@@ -100,10 +100,10 @@ TEST_CASE("bad ssl", "[session][network-required]") {
         auto session = SessionFactory::create(GENERATE("openssl", "mbedtls"), config);
         REQUIRE(session);
 
-        REQUIRE_THROWS_AS(session->get("https://expired.badssl.com/"), OhcException);
-        REQUIRE_THROWS_AS(session->get("https://wrong.host.badssl.com/"), OhcException);
-        REQUIRE_THROWS_AS(session->get("https://self-signed.badssl.com/"), OhcException);
-        REQUIRE_THROWS_AS(session->get("https://untrusted-root.badssl.com/"), OhcException);
+        REQUIRE_THROWS_AS(session->get(Url{"https://expired.badssl.com/"}), OhcException);
+        REQUIRE_THROWS_AS(session->get(Url{"https://wrong.host.badssl.com/"}), OhcException);
+        REQUIRE_THROWS_AS(session->get(Url{"https://self-signed.badssl.com/"}), OhcException);
+        REQUIRE_THROWS_AS(session->get(Url{"https://untrusted-root.badssl.com/"}), OhcException);
     }
 
     SECTION("insecure") {
@@ -111,10 +111,10 @@ TEST_CASE("bad ssl", "[session][network-required]") {
         auto session = SessionFactory::create(GENERATE("openssl", "mbedtls"), config);
         REQUIRE(session);
 
-        REQUIRE_NOTHROW(session->get("https://expired.badssl.com/"));
-        REQUIRE_NOTHROW(session->get("https://wrong.host.badssl.com/"));
-        REQUIRE_NOTHROW(session->get("https://self-signed.badssl.com/"));
-        REQUIRE_NOTHROW(session->get("https://untrusted-root.badssl.com/"));
+        REQUIRE_NOTHROW(session->get(Url{"https://expired.badssl.com/"}));
+        REQUIRE_NOTHROW(session->get(Url{"https://wrong.host.badssl.com/"}));
+        REQUIRE_NOTHROW(session->get(Url{"https://self-signed.badssl.com/"}));
+        REQUIRE_NOTHROW(session->get(Url{"https://untrusted-root.badssl.com/"}));
     }
 }
 
@@ -127,9 +127,9 @@ TEST_CASE("min TLS version", "[session][network-required]") {
         auto session = SessionFactory::create(GENERATE("openssl", "mbedtls"), config);
         REQUIRE(session);
 
-        REQUIRE_NOTHROW(session->get("https://tls-v1-0.badssl.com:1010/"));
-        REQUIRE_NOTHROW(session->get("https://tls-v1-1.badssl.com:1011/"));
-        REQUIRE_NOTHROW(session->get("https://tls-v1-2.badssl.com:1012/"));
+        REQUIRE_NOTHROW(session->get(Url{"https://tls-v1-0.badssl.com:1010/"}));
+        REQUIRE_NOTHROW(session->get(Url{"https://tls-v1-1.badssl.com:1011/"}));
+        REQUIRE_NOTHROW(session->get(Url{"https://tls-v1-2.badssl.com:1012/"}));
     }
 
     SECTION("1.1") {
@@ -139,9 +139,9 @@ TEST_CASE("min TLS version", "[session][network-required]") {
         auto session = SessionFactory::create(GENERATE("openssl", "mbedtls"), config);
         REQUIRE(session);
 
-        REQUIRE_THROWS_AS(session->get("https://tls-v1-0.badssl.com:1010/"), OhcException);
-        REQUIRE_NOTHROW(session->get("https://tls-v1-1.badssl.com:1011/"));
-        REQUIRE_NOTHROW(session->get("https://tls-v1-2.badssl.com:1012/"));
+        REQUIRE_THROWS_AS(session->get(Url{"https://tls-v1-0.badssl.com:1010/"}), OhcException);
+        REQUIRE_NOTHROW(session->get(Url{"https://tls-v1-1.badssl.com:1011/"}));
+        REQUIRE_NOTHROW(session->get(Url{"https://tls-v1-2.badssl.com:1012/"}));
     }
 
     SECTION("1.2") {
@@ -151,8 +151,8 @@ TEST_CASE("min TLS version", "[session][network-required]") {
         auto session = SessionFactory::create(GENERATE("openssl", "mbedtls"), config);
         REQUIRE(session);
 
-        REQUIRE_THROWS_AS(session->get("https://tls-v1-0.badssl.com:1010/"), OhcException);
-        REQUIRE_THROWS_AS(session->get("https://tls-v1-1.badssl.com:1011/"), OhcException);
-        REQUIRE_NOTHROW(session->get("https://tls-v1-2.badssl.com:1012/"));
+        REQUIRE_THROWS_AS(session->get(Url{"https://tls-v1-0.badssl.com:1010/"}), OhcException);
+        REQUIRE_THROWS_AS(session->get(Url{"https://tls-v1-1.badssl.com:1011/"}), OhcException);
+        REQUIRE_NOTHROW(session->get(Url{"https://tls-v1-2.badssl.com:1012/"}));
     }
 }
