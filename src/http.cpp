@@ -52,6 +52,15 @@ auto Request::makeMessage() const -> std::string
         header += "Authorization: Basic " + basicCookie + "\r\n";
     }
 
+    if (url.scheme() == "http" && proxy && !proxy->userinfo.empty()) {
+        auto const basicCookie = ohc::utils::base64Encode(proxy->userinfo);
+        header += "Proxy-Authorization: Basic " + basicCookie + "\r\n";
+    }
+
+    for (auto const& e : extraHeaders) {
+        header += e + "\r\n";
+    }
+
     return method_ + " " + makeRequestUri() + " " + versionMark +"\r\n" + header + "\r\n";
 }
 

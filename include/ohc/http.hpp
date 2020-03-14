@@ -29,6 +29,9 @@ public:
     Url url;  // target of most methods
     Url connectAuthority;  // target of CONNECT method
 
+    // "Key: Value" with no \r\n at the end
+    std::vector<std::string> extraHeaders;
+
     std::optional<Url> proxy;
     std::optional<Authentication> basicAuth;
 

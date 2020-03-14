@@ -2,6 +2,7 @@
 #include <spdlog/spdlog.h>
 #include <ohc/buffer.hpp>
 #include <ohc/exceptions.hpp>
+#include "utils.hpp"
 
 Session::Session(SessionConfig config)
     : config_{std::move(config)}
@@ -111,6 +112,12 @@ void Session::setupHttps(Request const& req)
             proxyReq.method("CONNECT");
             proxyReq.url = *req.proxy;
             proxyReq.connectAuthority = req.url;
+
+            if (!req.proxy->userinfo.empty()) {
+                proxyReq.extraHeaders = {
+                    "Proxy-Authorization: Basic " + ohc::utils::base64Encode(req.proxy->userinfo),
+                };
+            }
 
             auto const& resp = this->makeRequest(proxyReq);
 
