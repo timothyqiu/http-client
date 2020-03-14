@@ -1,5 +1,5 @@
-#ifndef APPS_OPENSSL_CORE_HPP_
-#define APPS_OPENSSL_CORE_HPP_
+#ifndef OHC_OPENSSL_CORE_HPP_
+#define OHC_OPENSSL_CORE_HPP_
 
 #include <memory>
 #include <openssl/bio.h>
@@ -11,4 +11,4 @@ using BioPtr = std::unique_ptr<BIO, BioDeleter>;
 struct SslCtxDeleter { void operator()(SSL_CTX *ctx) { SSL_CTX_free(ctx); } };
 using SslCtxPtr = std::unique_ptr<SSL_CTX, SslCtxDeleter>;
 
-#endif  // APPS_OPENSSL_CORE_HPP_
+#endif  // OHC_OPENSSL_CORE_HPP_

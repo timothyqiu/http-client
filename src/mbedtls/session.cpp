@@ -116,7 +116,6 @@ auto MbedTlsSession::createBuffer() -> std::unique_ptr<Buffer>
 auto MbedTlsSession::getSslConfig() -> mbedtls_ssl_config const *
 {
     if (!sslConfig_) {
-        // TODO: don't use hardcoded path
         sslConfig_ = std::make_unique<SslConfig>(this->config());
     }
     return sslConfig_->get();

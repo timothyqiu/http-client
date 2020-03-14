@@ -1,5 +1,5 @@
-#ifndef APPS_OPENSSL_BUFER_HPP_
-#define APPS_OPENSSL_BUFER_HPP_
+#ifndef OHC_OPENSSL_BUFER_HPP_
+#define OHC_OPENSSL_BUFER_HPP_
 
 #include <cstddef>
 #include <cstdint>
@@ -19,4 +19,4 @@ private:
     BIO *bio_;
 };
 
-#endif  // APPS_OPENSSL_BUFER_HPP_
+#endif  // OHC_OPENSSL_BUFER_HPP_

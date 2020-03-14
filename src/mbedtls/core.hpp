@@ -1,5 +1,5 @@
-#ifndef APPS_MBEDTLS_CORE_HPP_
-#define APPS_MBEDTLS_CORE_HPP_
+#ifndef OHC_MBEDTLS_CORE_HPP_
+#define OHC_MBEDTLS_CORE_HPP_
 
 #include <mbedtls/ctr_drbg.h>
 #include <mbedtls/entropy.h>
@@ -47,4 +47,4 @@ private:
     X509Cert cert_;
 };
 
-#endif  // APPS_MBEDTLS_CORE_HPP_
+#endif  // OHC_MBEDTLS_CORE_HPP_

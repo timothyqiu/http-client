@@ -1,5 +1,5 @@
-#ifndef APPS_OPENSSL_SESSION_HPP_
-#define APPS_OPENSSL_SESSION_HPP_
+#ifndef OHC_OPENSSL_SESSION_HPP_
+#define OHC_OPENSSL_SESSION_HPP_
 
 #include <string>
 #include <ohc/session.hpp>
@@ -26,4 +26,4 @@ private:
     auto createBuffer() -> std::unique_ptr<Buffer> override;
 };
 
-#endif  // APPS_OPENSSL_SESSION_HPP_
+#endif  // OHC_OPENSSL_SESSION_HPP_

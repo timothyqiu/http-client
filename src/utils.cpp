@@ -63,4 +63,4 @@ auto base64Encode(std::string_view view) -> std::string
     return std::string{std::begin(buffer), std::end(buffer)};
 }
 
-}  // namespace ohc
+}  // namespace ohc::utils

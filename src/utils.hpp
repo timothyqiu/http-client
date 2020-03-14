@@ -11,6 +11,6 @@ auto toUpper(std::string_view view) -> std::string;
 
 auto base64Encode(std::string_view view) -> std::string;
 
-}  // namespace ohc
+}  // namespace ohc::utils
 
 #endif  // OHC_UTILS_HPP_

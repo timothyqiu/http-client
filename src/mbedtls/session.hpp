@@ -1,5 +1,5 @@
-#ifndef APP_MBEDTLS_SESSION_HPP_
-#define APP_MBEDTLS_SESSION_HPP_
+#ifndef OHC_MBEDTLS_SESSION_HPP_
+#define OHC_MBEDTLS_SESSION_HPP_
 
 #include <memory>
 #include <ohc/session.hpp>
@@ -29,4 +29,4 @@ private:
     auto createBuffer() -> std::unique_ptr<Buffer> override;
 };
 
-#endif  // APP_MBEDTLS_SESSION_HPP_
+#endif  // OHC_MBEDTLS_SESSION_HPP_

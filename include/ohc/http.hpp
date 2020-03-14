@@ -9,8 +9,9 @@
 #include <string_view>
 #include <vector>
 
-#include <ohc/buffer.hpp>
 #include <ohc/url.hpp>
+
+class Buffer;
 
 enum class HttpVersion { VERSION_1_0, VERSION_1_1 };
 

@@ -5,6 +5,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include <ohc/buffer.hpp>
 #include <ohc/exceptions.hpp>
 #include "utils.hpp"
 

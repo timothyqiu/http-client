@@ -1,5 +1,5 @@
-#ifndef APPS_MBEDTLS_BUFER_HPP_
-#define APPS_MBEDTLS_BUFER_HPP_
+#ifndef OHC_MBEDTLS_BUFER_HPP_
+#define OHC_MBEDTLS_BUFER_HPP_
 
 #include <cstddef>
 #include <cstdint>
@@ -32,4 +32,4 @@ private:
     mbedtls_ssl_context *ctx_;
 };
 
-#endif  // APPS_MBEDTLS_BUFER_HPP_
+#endif  // OHC_MBEDTLS_BUFER_HPP_
