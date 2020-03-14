@@ -9,6 +9,8 @@ namespace ohc::utils {
 auto toLower(std::string_view view) -> std::string;
 auto toUpper(std::string_view view) -> std::string;
 
+auto base64Encode(std::string_view view) -> std::string;
+
 }  // namespace ohc
 
 #endif  // OHC_UTILS_HPP_

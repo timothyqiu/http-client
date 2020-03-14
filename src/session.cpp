@@ -10,12 +10,13 @@ Session::Session(SessionConfig config)
 
 Session::~Session() = default;
 
-auto Session::get(Url const& url) -> Response
+auto Session::get(Url const& url, std::optional<Authentication> basicAuth)-> Response
 {
     Request req;
     req.version = config_.httpVersion();
     req.method("GET");
     req.url = url;
+    req.basicAuth = basicAuth;
 
     if (url.scheme() == "http") {
         req.proxy = config_.httpProxy();

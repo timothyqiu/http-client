@@ -14,6 +14,11 @@
 
 enum class HttpVersion { VERSION_1_0, VERSION_1_1 };
 
+struct Authentication {
+    std::string user;
+    std::string password;
+};
+
 class Request {
 public:
     // TODO: property setter?
@@ -24,6 +29,7 @@ public:
     Url connectAuthority;  // target of CONNECT method
 
     std::optional<Url> proxy;
+    std::optional<Authentication> basicAuth;
 
     auto method() const -> std::string_view;
     void method(std::string_view value);

@@ -46,6 +46,11 @@ auto Request::makeMessage() const -> std::string
         break;
     }
 
+    if (basicAuth) {
+        auto const basicCookie = ohc::utils::base64Encode(basicAuth->user + ":" + basicAuth->password);
+        header += "Authorization: Basic " + basicCookie + "\r\n";
+    }
+
     return method_ + " " + makeRequestUri() + " " + versionMark +"\r\n" + header + "\r\n";
 }
 

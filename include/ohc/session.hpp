@@ -2,6 +2,7 @@
 #define OHC_SESSION_HPP_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -18,7 +19,7 @@ public:
 
     auto config() const -> SessionConfig const& { return config_; }
 
-    auto get(Url const& url) -> Response;
+    auto get(Url const& url, std::optional<Authentication> basicAuth={}) -> Response;
     auto request(Request const& req) -> Response;
 
 private:

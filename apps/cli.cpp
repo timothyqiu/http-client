@@ -53,6 +53,9 @@ try {
     int maxRedirs{50};  // -1 means unlimited
     app.add_option("--max-redirs", maxRedirs, "Maximum number of redirects allowed");
 
+    std::string auth;
+    app.add_option("--auth", auth, "Basic HTTP auth credentials");
+
     bool isVerbose{false};
     app.add_flag("--verbose", isVerbose, "Make the operation more talkative");
 
@@ -81,6 +84,17 @@ try {
         configBuilder.httpsProxy(Url{httpsProxy, "http"});
     }
 
+    std::optional<Authentication> basicAuth;
+    if (!auth.empty()) {
+        auto const n = auth.find(':');
+        if (n == std::string::npos) {
+            throw std::runtime_error{"basic auth format should be `user:pass`"};
+        }
+        std::string_view user{auth.data(), n};
+        std::string_view pass{auth.data() + n + 1, auth.size() - n - 1};
+        basicAuth = Authentication{std::string{user}, std::string{pass}};
+    }
+
     auto session = SessionFactory::create(driver, configBuilder.build());
     if (!session) {
         throw std::runtime_error{"no such driver: " + driver};
@@ -89,7 +103,7 @@ try {
     int numRedirected = 0;
     Url requestUrl{url, "http"};
     while (true) {
-        auto const resp = session->get(requestUrl);
+        auto const resp = session->get(requestUrl, basicAuth);
 
         // TODO: move these to session
         if (isFollow && (resp.statusCode == 301 || resp.statusCode == 302 || resp.statusCode == 303)) {
