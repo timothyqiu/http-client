@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.11)
 
 project(HttpClient LANGUAGES CXX)
 
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_BINARY_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_BINARY_DIR}")
 
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
   set(CMAKE_CXX_EXTENSIONS OFF)
@@ -34,11 +34,14 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
   endif()
 endif()
 
-find_package(Filesystem REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(mbedtls REQUIRED)
 find_package(CLI11 REQUIRED)
 find_package(spdlog REQUIRED)
+
+# CLI11 uses std::filesystem in C++17, may require extra std-libraries
+# depends on the compiler. Just disable the use of std::filesystem here.
+target_compile_definitions(CLI11::CLI11 INTERFACE CLI11_HAS_FILESYSTEM=0)
 
 add_subdirectory(src)
 add_subdirectory(apps)
