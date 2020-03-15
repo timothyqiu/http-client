@@ -3,7 +3,6 @@
 #include <exception>
 #include <string>
 
-#include <CLI/CLI.hpp>
 #include <spdlog/spdlog.h>
 
 #include <ohc/exceptions.hpp>
@@ -13,106 +12,62 @@
 #include <ohc/session_factory.hpp>
 #include <ohc/url.hpp>
 
+#include "config.hpp"
+
 int main(int argc, char *argv[])
 try {
-    CLI::App app{"HTTP Client via OpenSSL"};
+    Config config{argc, argv};
 
-    std::string url;
-    app.add_option("url", url, "Target URL")->required();
-
-    std::string driver{"openssl"};
-    app.add_set("--driver", driver, {"openssl", "mbedtls"});
-
-    HttpVersion httpVersion{HttpVersion::VERSION_1_1};
-    app.add_flag_callback("--http1.0", [&](){ httpVersion = HttpVersion::VERSION_1_0; }, "Uses HTTP 1.0");
-    app.add_flag_callback("--http1.1", [&](){ httpVersion = HttpVersion::VERSION_1_1; }, "Uses HTTP 1.1");
-
-    TlsVersion minTlsVersion{TlsVersion::VERSION_1_2};
-    app.add_flag_callback("--tlsv1.0", [&](){ minTlsVersion = TlsVersion::VERSION_1_0; }, "Use TLSv1.0 or greater");
-    app.add_flag_callback("--tlsv1.1", [&](){ minTlsVersion = TlsVersion::VERSION_1_1; }, "Use TLSv1.1 or greater");
-    app.add_flag_callback("--tlsv1.2", [&](){ minTlsVersion = TlsVersion::VERSION_1_2; }, "Use TLSv1.2 or greater");
-
-    std::string httpProxy;
-    app.add_option("--http-proxy", httpProxy, "The proxy server to use for HTTP")->envname("http_proxy");
-    std::string httpsProxy;
-    app.add_option("--https-proxy", httpsProxy, "The proxy server to use for HTTPS")->envname("https_proxy");
-
-    std::string caCert;
-    std::string caPath;
-    app.add_option("--cacert", caCert, "CA certificate to verify peer against")->check(CLI::ExistingFile);
-    app.add_option("--capath", caPath, "CA directory to verify peer against")->check(CLI::ExistingDirectory);
-
-    bool insecure{false};
-    bool proxyInsecure{false};
-    app.add_flag("-k,--insecure", insecure, "Allow insecure server connections when using SSL");
-    app.add_flag("--proxy-insecure", proxyInsecure, "Do HTTPS proxy connections without verifying the proxy");
-
-    bool isFollow{false};
-    app.add_flag("-L,--location", isFollow, "Follow redirects");
-
-    int maxRedirs{50};  // -1 means unlimited
-    app.add_option("--max-redirs", maxRedirs, "Maximum number of redirects allowed");
-
-    std::string auth;
-    app.add_option("--auth", auth, "Basic HTTP auth credentials");
-
-    bool isVerbose{false};
-    app.add_flag("--verbose", isVerbose, "Make the operation more talkative");
-
-    CLI11_PARSE(app, argc, argv);
-
-    // Preparation done
-
-    spdlog::set_level(isVerbose ? spdlog::level::debug : spdlog::level::warn);
+    spdlog::set_level(config.isVerbose ? spdlog::level::debug : spdlog::level::warn);
 
     auto configBuilder = SessionConfig::Builder()
-        .httpVersion(httpVersion)
-        .minTlsVersion(minTlsVersion)
-        .insecure(insecure)
-        .proxyInsecure(proxyInsecure);
+        .httpVersion(config.httpVersion)
+        .minTlsVersion(config.minTlsVersion)
+        .insecure(config.insecure)
+        .proxyInsecure(config.proxyInsecure);
 
-    if (!caCert.empty()) {
-        configBuilder.caCert(caCert);
+    if (!config.caCert.empty()) {
+        configBuilder.caCert(config.caCert);
     }
-    if (!caPath.empty()) {
-        configBuilder.caPath(caPath);
+    if (!config.caPath.empty()) {
+        configBuilder.caPath(config.caPath);
     }
-    if (!httpProxy.empty()) {
-        configBuilder.httpProxy(Url{httpProxy, "http"});
+    if (!config.httpProxy.empty()) {
+        configBuilder.httpProxy(Url{config.httpProxy, "http"});
     }
-    if (!httpsProxy.empty()) {
-        configBuilder.httpsProxy(Url{httpsProxy, "http"});
+    if (!config.httpsProxy.empty()) {
+        configBuilder.httpsProxy(Url{config.httpsProxy, "http"});
     }
 
     std::optional<Authentication> basicAuth;
-    if (!auth.empty()) {
-        auto const n = auth.find(':');
+    if (!config.auth.empty()) {
+        auto const n = config.auth.find(':');
         if (n == std::string::npos) {
             throw std::runtime_error{"basic auth format should be `user:pass`"};
         }
-        std::string_view user{auth.data(), n};
-        std::string_view pass{auth.data() + n + 1, auth.size() - n - 1};
+        std::string_view user{config.auth.data(), n};
+        std::string_view pass{config.auth.data() + n + 1, config.auth.size() - n - 1};
         basicAuth = Authentication{std::string{user}, std::string{pass}};
     }
 
-    auto session = SessionFactory::create(driver, configBuilder.build());
+    auto session = SessionFactory::create(config.driver, configBuilder.build());
     if (!session) {
-        throw std::runtime_error{"no such driver: " + driver};
+        throw std::runtime_error{"no such driver: " + config.driver};
     }
 
     int numRedirected = 0;
-    Url requestUrl{url, "http"};
+    Url requestUrl{config.url, "http"};
     while (true) {
         auto const resp = session->get(requestUrl, basicAuth);
 
         // TODO: move these to session
-        if (isFollow && (resp.statusCode == 301 || resp.statusCode == 302 || resp.statusCode == 303)) {
+        if (config.isFollow && (resp.statusCode == 301 || resp.statusCode == 302 || resp.statusCode == 303)) {
             // TODO: don't redirect if non-GET
             auto const location = resp.headers.at("location");
             spdlog::debug("Redirect to: {}", location);
 
             numRedirected++;
-            if (maxRedirs != -1 && numRedirected > maxRedirs) {
+            if (config.maxRedirs != -1 && numRedirected > config.maxRedirs) {
                 throw std::runtime_error{"too many redirects"};
             }
 
