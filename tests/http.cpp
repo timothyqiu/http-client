@@ -2,7 +2,7 @@
 
 #include <ohc/http.hpp>
 
-TEST_CASE("Response::isSuccess", "[response]") {
+TEST_CASE("Response/isSuccess", "[response]") {
     Response response;
 
     SECTION("info") {
@@ -28,5 +28,33 @@ TEST_CASE("Response::isSuccess", "[response]") {
     SECTION("server error") {
         response.statusCode = GENERATE(500, 502);
         REQUIRE(!response.isSuccess());
+    }
+}
+
+TEST_CASE("Request/makeMessage", "[request]") {
+
+    Request req;
+    req.method("GET");
+    req.url = Url{"http://localhost:8080/"};
+
+    SECTION("1.0 request") {
+        req.version = HttpVersion::VERSION_1_0;
+
+        auto const expected = (
+           "GET / HTTP/1.0\r\n"
+           "\r\n"
+        );
+        REQUIRE(req.makeMessage() == expected);
+    }
+
+    SECTION("1.1 request") {
+        req.version = HttpVersion::VERSION_1_1;
+
+        auto const expected = (
+           "GET / HTTP/1.1\r\n"
+           "Host: localhost:8080\r\n"
+           "\r\n"
+        );
+        REQUIRE(req.makeMessage() == expected);
     }
 }

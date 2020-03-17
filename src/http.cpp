@@ -43,7 +43,7 @@ auto Request::makeMessage() const -> std::string
 
     case HttpVersion::VERSION_1_1:
         versionMark = "HTTP/1.1";
-        header = "Host: " + url.host + "\r\n";
+        header = "Host: " + url.host + ":" + url.port + "\r\n";
         break;
     }
 
