@@ -16,7 +16,7 @@ auto NetCtxBuffer::push(uint8_t const *data, size_t size) -> size_t
         throw MbedTlsError{"error writing data", n};
     }
     // TODO: = 0?
-    return n;
+    return static_cast<size_t>(n);
 }
 
 void NetCtxBuffer::pull()
@@ -33,7 +33,7 @@ void NetCtxBuffer::pull()
         // TODO: detail & dedicated exception
         throw MbedTlsError{"error reading data", n};
     }
-    this->markWritten(n);
+    this->markWritten(static_cast<size_t>(n));
 }
 
 SslCtxBuffer::SslCtxBuffer(mbedtls_ssl_context *ctx)
@@ -49,7 +49,7 @@ auto SslCtxBuffer::push(uint8_t const *data, size_t size) -> size_t
         throw MbedTlsError{"error writing data", n};
     }
     // TODO: = 0?
-    return n;
+    return static_cast<size_t>(n);
 }
 
 void SslCtxBuffer::pull()
@@ -66,5 +66,5 @@ void SslCtxBuffer::pull()
         // TODO: detail & dedicated exception
         throw MbedTlsError{"error reading data", n};
     }
-    this->markWritten(n);
+    this->markWritten(static_cast<size_t>(n));
 }

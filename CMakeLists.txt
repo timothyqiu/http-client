@@ -34,13 +34,28 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
   endif()
 endif()
 
+add_library(project_warnings INTERFACE)
+target_compile_options(
+  project_warnings
+  INTERFACE $<$<CXX_COMPILER_ID:MSVC>:
+            /W4
+            /w14640>
+            $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:
+            -Wall
+            -Wextra
+            -pedantic
+            -Wshadow
+            -Wsign-conversion
+            -Wswitch-enum
+            -Wnon-virtual-dtor>)
+
 find_package(OpenSSL REQUIRED)
 find_package(mbedtls REQUIRED)
 find_package(CLI11 REQUIRED)
 find_package(spdlog REQUIRED)
 
-# CLI11 uses std::filesystem in C++17, may require extra std-libraries
-# depends on the compiler. Just disable the use of std::filesystem here.
+# CLI11 uses std::filesystem in C++17, may require extra std-libraries depends on the
+# compiler. Just disable the use of std::filesystem here.
 target_compile_definitions(CLI11::CLI11 INTERFACE CLI11_HAS_FILESYSTEM=0)
 
 add_subdirectory(src)

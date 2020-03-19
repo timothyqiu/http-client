@@ -100,10 +100,13 @@ auto Url::authority() const -> std::string
 
 auto Url::toRelativeString(bool allowFragment) const -> std::string
 {
-    auto const& path = this->path.empty() ? "/" : this->path;
-    auto const& query = this->query.empty() ? "" : "?" + this->query;
-    auto const& fragment = !allowFragment || this->fragment.empty() ? "" : "#" + this->fragment;
-    return path + query + fragment;
+    auto const withoutFragment = (this->path.empty() ? "/" : this->path)
+        + (this->query.empty() ? "" : "?" + this->query);
+
+    if (!allowFragment) {
+        return withoutFragment;
+    }
+    return withoutFragment + (this->fragment.empty() ? "" : "#" + this->fragment);
 }
 
 auto Url::toAbsoluteString(bool allowFragment) const -> std::string
@@ -111,10 +114,16 @@ auto Url::toAbsoluteString(bool allowFragment) const -> std::string
     if (this->scheme().empty()) {
         throw OhcException{"missing scheme"};
     }
-    auto const& userinfo = this->userinfo.empty() ? "" : this->userinfo + "@";
-    auto const& port = this->port.empty() || this->port == portFromScheme(this->scheme()) ? "" : ":" + this->port;
-    auto const& path = this->path.empty() ? "/" : this->path;
-    auto const& query = this->query.empty() ? "" : "?" + this->query;
-    auto const& fragment = !allowFragment || this->fragment.empty() ? "" : "#" + this->fragment;
-    return this->scheme() + "://" + userinfo + this->host + port + path + query + fragment;
+
+    auto const withoutFragment = this->scheme() + "://"
+        + (this->userinfo.empty() ? "" : this->userinfo + "@")
+        + this->host
+        + (this->port.empty() || this->port == portFromScheme(this->scheme()) ? "" : ":" + this->port)
+        + (this->path.empty() ? "/" : this->path)
+        + (this->query.empty() ? "" : "?" + this->query);
+
+    if (!allowFragment) {
+        return withoutFragment;
+    }
+    return withoutFragment + (this->fragment.empty() ? "" : "#" + this->fragment);
 }

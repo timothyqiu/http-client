@@ -15,7 +15,7 @@ auto BioBuffer::push(uint8_t const *data, size_t size) -> size_t
     if (n < 1) {
         throw OpenSslError{"error writing data"};
     }
-    return n;
+    return static_cast<size_t>(n);
 }
 
 void BioBuffer::pull()
@@ -35,5 +35,5 @@ void BioBuffer::pull()
         }
         throw OpenSslError{"error reading data"};
     }
-    this->markWritten(n);
+    this->markWritten(static_cast<size_t>(n));
 }
