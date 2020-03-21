@@ -35,7 +35,13 @@ add_library(
   mbedtls/session.cpp)
 add_library(ohc::ohc ALIAS ohc)
 
+set_target_properties(ohc PROPERTIES PUBLIC_HEADER "${HEADER_LIST}")
+
 target_include_directories(ohc PUBLIC ../include)
 target_compile_features(ohc PUBLIC cxx_std_17)
 target_link_libraries(ohc PRIVATE project_warnings spdlog::spdlog OpenSSL::OpenSSL
                                   mbedtls::mbedtls)
+
+if(HTTPCLIENT_INSTALL)
+  install(TARGETS ohc PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/ohc)
+endif()
